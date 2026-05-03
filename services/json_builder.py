@@ -16,15 +16,26 @@ _PERM_MAP: dict[str, int] = {
     "manage_channels": discord.Permissions.manage_channels.flag,
     "manage_roles": discord.Permissions.manage_roles.flag,
     "manage_messages": discord.Permissions.manage_messages.flag,
+    "manage_threads": discord.Permissions.manage_threads.flag,
     "kick_members": discord.Permissions.kick_members.flag,
     "ban_members": discord.Permissions.ban_members.flag,
     "send_messages": discord.Permissions.send_messages.flag,
+    "view_channel": discord.Permissions.view_channel.flag,
     "read_messages": discord.Permissions.read_messages.flag,
+    "read_message_history": discord.Permissions.read_message_history.flag,
+    "create_public_threads": discord.Permissions.create_public_threads.flag,
+    "create_private_threads": discord.Permissions.create_private_threads.flag,
+    "send_messages_in_threads": discord.Permissions.send_messages_in_threads.flag,
+    "add_reactions": discord.Permissions.add_reactions.flag,
+    "use_external_emojis": discord.Permissions.use_external_emojis.flag,
+    "use_external_stickers": discord.Permissions.use_external_stickers.flag,
+    "use_application_commands": discord.Permissions.use_application_commands.flag,
     "connect": discord.Permissions.connect.flag,
     "speak": discord.Permissions.speak.flag,
     "mute_members": discord.Permissions.mute_members.flag,
     "deafen_members": discord.Permissions.deafen_members.flag,
     "move_members": discord.Permissions.move_members.flag,
+    "manage_nicknames": discord.Permissions.manage_nicknames.flag,
     "mention_everyone": discord.Permissions.mention_everyone.flag,
     "embed_links": discord.Permissions.embed_links.flag,
     "attach_files": discord.Permissions.attach_files.flag,
@@ -59,6 +70,38 @@ _NAMED_COLOURS: dict[str, int] = {
     "black": 0x010101, "blurple": 0x5865F2, "greyple": 0x99AAB5,
 }
 
+_FONT_OFFSETS: dict[str, dict[str, int]] = {
+    "bold": {"upper": 0x1D400, "lower": 0x1D41A, "digit": 0x1D7CE},
+    "italic": {"upper": 0x1D434, "lower": 0x1D44E},
+    "bold_italic": {"upper": 0x1D468, "lower": 0x1D482},
+    "script": {"upper": 0x1D49C, "lower": 0x1D4B6},
+    "bold_script": {"upper": 0x1D4D0, "lower": 0x1D4EA},
+    "fraktur": {"upper": 0x1D504, "lower": 0x1D51E},
+    "double_struck": {"upper": 0x1D538, "lower": 0x1D552, "digit": 0x1D7D8},
+    "monospace": {"upper": 0x1D670, "lower": 0x1D68A, "digit": 0x1D7F6},
+}
+
+_SCRIPT_EXCEPTIONS = {
+    "B": "\u212c", "E": "\u2130", "F": "\u2131", "H": "\u210b", "I": "\u2110",
+    "L": "\u2112", "M": "\u2133", "R": "\u211b", "e": "\u212f", "g": "\u210a",
+    "o": "\u2134",
+}
+_FRAKTUR_EXCEPTIONS = {
+    "C": "\u212d", "H": "\u210c", "I": "\u2111", "R": "\u211c", "Z": "\u2128",
+}
+_DOUBLE_STRUCK_EXCEPTIONS = {
+    "C": "\u2102", "H": "\u210d", "N": "\u2115", "P": "\u2119", "Q": "\u211a",
+    "R": "\u211d", "Z": "\u2124",
+}
+_SMALL_CAPS = str.maketrans({
+    "a": "\u1d00", "b": "\u0299", "c": "\u1d04", "d": "\u1d05", "e": "\u1d07",
+    "f": "\ua730", "g": "\u0262", "h": "\u029c", "i": "\u026a", "j": "\u1d0a",
+    "k": "\u1d0b", "l": "\u029f", "m": "\u1d0d", "n": "\u0274", "o": "\u1d0f",
+    "p": "\u1d18", "q": "q", "r": "\u0280", "s": "s", "t": "\u1d1b",
+    "u": "\u1d1c", "v": "\u1d20", "w": "\u1d21", "x": "x", "y": "\u028f",
+    "z": "\u1d22",
+})
+
 
 def _parse_colour(colour_str: str | None) -> discord.Colour:
     """Parse a colour from hex (#FF0000) or named colour (red, gold, blurple, etc.)."""
@@ -74,6 +117,99 @@ def _parse_colour(colour_str: str | None) -> discord.Colour:
     except ValueError:
         log.warning("Unknown colour: %s — using default", colour_str)
         return discord.Colour.default()
+
+
+def _style_text(text: str, style: str | None) -> str:
+    """Apply a Unicode text style. Discord does not support installable fonts."""
+    if not style:
+        return text
+
+    normalized = style.strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized == "small_caps":
+        return text.lower().translate(_SMALL_CAPS)
+
+    offsets = _FONT_OFFSETS.get(normalized)
+    if not offsets:
+        return text
+
+    exceptions: dict[str, str] = {}
+    if normalized in {"script", "bold_script"}:
+        exceptions = _SCRIPT_EXCEPTIONS
+    elif normalized == "fraktur":
+        exceptions = _FRAKTUR_EXCEPTIONS
+    elif normalized == "double_struck":
+        exceptions = _DOUBLE_STRUCK_EXCEPTIONS
+
+    styled: list[str] = []
+    for char in text:
+        if char in exceptions:
+            styled.append(exceptions[char])
+        elif "A" <= char <= "Z" and "upper" in offsets:
+            styled.append(chr(offsets["upper"] + ord(char) - ord("A")))
+        elif "a" <= char <= "z" and "lower" in offsets:
+            styled.append(chr(offsets["lower"] + ord(char) - ord("a")))
+        elif "0" <= char <= "9" and "digit" in offsets:
+            styled.append(chr(offsets["digit"] + ord(char) - ord("0")))
+        else:
+            styled.append(char)
+
+    return "".join(styled)
+
+
+def _styled_name(data: dict[str, Any], fallback_style: str | None = None) -> str:
+    style = data.get("font") or data.get("name_font") or data.get("name_style") or fallback_style
+    return _style_text(data["name"], style)
+
+
+def _role_aliases(role_name: str) -> set[str]:
+    lowered = role_name.lower()
+    aliases = {role_name}
+    if any(word in lowered for word in ("owner", "admin", "administrator")):
+        aliases.update({"Owner", "Admin", "Administrator"})
+    if any(word in lowered for word in ("mod", "moderator")):
+        aliases.update({"Mod", "Moderator"})
+    return aliases
+
+
+def _find_existing_role(guild: discord.Guild, name: str) -> discord.Role | None:
+    return discord.utils.get(guild.roles, name=name)
+
+
+def _forum_sort_order(value: str | None) -> discord.ForumOrderType | None:
+    if not value:
+        return None
+    cleaned = value.lower().replace("-", "_").replace(" ", "_")
+    return {
+        "latest_activity": discord.ForumOrderType.latest_activity,
+        "creation_date": discord.ForumOrderType.creation_date,
+    }.get(cleaned)
+
+
+def _forum_layout(value: str | None) -> discord.ForumLayoutType | None:
+    if not value:
+        return None
+    cleaned = value.lower().replace("-", "_").replace(" ", "_")
+    return {
+        "not_set": discord.ForumLayoutType.not_set,
+        "list": discord.ForumLayoutType.list_view,
+        "list_view": discord.ForumLayoutType.list_view,
+        "gallery": discord.ForumLayoutType.gallery_view,
+        "gallery_view": discord.ForumLayoutType.gallery_view,
+    }.get(cleaned)
+
+
+def _forum_tags(tags: list[dict[str, Any]]) -> list[discord.ForumTag]:
+    forum_tags: list[discord.ForumTag] = []
+    for tag in tags[:20]:
+        emoji = tag.get("emoji")
+        forum_tags.append(
+            discord.ForumTag(
+                name=tag["name"],
+                emoji=emoji if isinstance(emoji, str) else None,
+                moderated=tag.get("moderated", False),
+            )
+        )
+    return forum_tags
 
 
 class BuildProgress:
@@ -96,6 +232,8 @@ async def build_server(
     guild: discord.Guild,
     schema: dict[str, Any],
     progress_msg: discord.Message | None = None,
+    selected_roles: dict[str, discord.Role] | None = None,
+    skip_existing_roles: bool = True,
 ) -> tuple[list[str], dict[str, discord.Role]]:
     """Build roles, categories, and channels in *guild* from *schema*.
 
@@ -115,24 +253,63 @@ async def build_server(
 
     try:
         # ── Rename server ────────────────────────────────────────────────────
+        global_font = schema.get("font") or schema.get("name_font") or schema.get("name_style")
+        channel_font = schema.get("channel_font") or global_font
+        category_font = schema.get("category_font") or global_font
+        role_font = schema.get("role_font")
+
         if schema.get("server_name"):
-            await guild.edit(name=schema["server_name"])
-            logs.append(f"Renamed server to **{schema['server_name']}**")
+            server_name = _style_text(schema["server_name"], schema.get("server_font"))
+            await guild.edit(name=server_name)
+            logs.append(f"Renamed server to **{server_name}**")
 
         # ── Create roles ─────────────────────────────────────────────────────
         role_map: dict[str, discord.Role] = {}
+        for alias, role in (selected_roles or {}).items():
+            role_map[alias] = role
+            for extra_alias in _role_aliases(alias):
+                role_map.setdefault(extra_alias, role)
+
         for role_data in schema.get("roles", []):
+            role_name = role_data["name"]
+            styled_role_name = _styled_name(role_data, role_font)
+            role_permissions = [perm.lower() for perm in role_data.get("permissions", [])]
+
+            existing_role = role_map.get(role_name)
+            if not existing_role and selected_roles:
+                if "administrator" in role_permissions:
+                    existing_role = selected_roles.get("Admin") or selected_roles.get("Administrator")
+                elif any(word in role_name.lower() for word in ("mod", "moderator")):
+                    existing_role = selected_roles.get("Mod") or selected_roles.get("Moderator")
+
+            if not existing_role and skip_existing_roles:
+                existing_role = _find_existing_role(guild, role_name) or _find_existing_role(guild, styled_role_name)
+
+            if existing_role:
+                role_map[role_name] = existing_role
+                role_map[styled_role_name] = existing_role
+                for alias in _role_aliases(role_name):
+                    role_map.setdefault(alias, existing_role)
+                logs.append(f"Skipped existing role: **{existing_role.name}**")
+                progress.advance()
+                if progress_msg:
+                    await _update_progress(progress_msg, progress)
+                continue
+
             perms = _resolve_permissions(role_data.get("permissions", []))
             colour = _parse_colour(role_data.get("color"))
             role = await guild.create_role(
-                name=role_data["name"],
+                name=styled_role_name,
                 colour=colour,
                 hoist=role_data.get("hoist", False),
                 mentionable=role_data.get("mentionable", False),
                 permissions=perms,
             )
             created_roles.append(role)
-            role_map[role_data["name"]] = role
+            role_map[role_name] = role
+            role_map[styled_role_name] = role
+            for alias in _role_aliases(role_name):
+                role_map.setdefault(alias, role)
             logs.append(f"Created role: **{role.name}**")
             progress.advance()
             if progress_msg:
@@ -152,9 +329,10 @@ async def build_server(
                     deny = _resolve_permissions(ow.get("deny", []))
                     overwrites[target_role] = discord.PermissionOverwrite.from_pair(allow, deny)
 
-            category = await guild.create_category(name=cat_data["name"], overwrites=overwrites)
+            category_name = _styled_name(cat_data, category_font)
+            category = await guild.create_category(name=category_name, overwrites=overwrites)
             created_channels.append(category)
-            logs.append(f"Created category: **{cat_data['name']}**")
+            logs.append(f"Created category: **{category_name}**")
             progress.advance()
             if progress_msg:
                 await _update_progress(progress_msg, progress)
@@ -172,12 +350,13 @@ async def build_server(
                         ch_overwrites[target] = discord.PermissionOverwrite.from_pair(allow, deny)
 
                 ch_type = ch_data.get("type", "text").lower()
+                channel_name = _styled_name(ch_data, channel_font)
                 if ch_type == "voice":
                     # Clamp bitrate to guild's max (96000 for unboosted servers)
                     max_bitrate = guild.bitrate_limit
                     bitrate = min(ch_data.get("bitrate", 64000), max_bitrate)
                     kwargs: dict[str, Any] = {
-                        "name": ch_data["name"],
+                        "name": channel_name,
                         "category": category,
                         "bitrate": bitrate,
                         "user_limit": ch_data.get("user_limit", 0),
@@ -187,10 +366,37 @@ async def build_server(
                     vc = await guild.create_voice_channel(**kwargs)
                     created_channels.append(vc)
                     perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
-                    logs.append(f"Created voice channel: **{ch_data['name']}**{perm_note}")
+                    logs.append(f"Created voice channel: **{channel_name}**{perm_note}")
+                elif ch_type == "forum":
+                    kwargs = {
+                        "name": channel_name,
+                        "category": category,
+                        "topic": ch_data.get("topic", ""),
+                        "nsfw": ch_data.get("nsfw", False),
+                        "slowmode_delay": ch_data.get("slowmode", 0),
+                        "default_thread_slowmode_delay": ch_data.get("thread_slowmode", 0),
+                        "default_auto_archive_duration": ch_data.get("auto_archive", 1440),
+                    }
+                    tags = _forum_tags(ch_data.get("tags", []))
+                    if tags:
+                        kwargs["available_tags"] = tags
+                    sort_order = _forum_sort_order(ch_data.get("default_sort_order"))
+                    if sort_order:
+                        kwargs["default_sort_order"] = sort_order
+                    layout = _forum_layout(ch_data.get("default_layout"))
+                    if layout:
+                        kwargs["default_layout"] = layout
+                    if ch_data.get("default_reaction_emoji"):
+                        kwargs["default_reaction_emoji"] = ch_data["default_reaction_emoji"]
+                    if ch_overwrites:
+                        kwargs["overwrites"] = ch_overwrites
+                    forum = await guild.create_forum(**kwargs)
+                    created_channels.append(forum)
+                    perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    logs.append(f"Created forum channel: **{channel_name}**{perm_note}")
                 else:
                     kwargs: dict[str, Any] = {
-                        "name": ch_data["name"],
+                        "name": channel_name,
                         "category": category,
                         "topic": ch_data.get("topic", ""),
                         "slowmode_delay": ch_data.get("slowmode", 0),
@@ -201,7 +407,7 @@ async def build_server(
                     tc = await guild.create_text_channel(**kwargs)
                     created_channels.append(tc)
                     perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
-                    logs.append(f"Created text channel: **#{ch_data['name']}**{perm_note}")
+                    logs.append(f"Created text channel: **#{channel_name}**{perm_note}")
 
                     # Optional thread creation
                     for thread_data in ch_data.get("threads", []):
