@@ -10,6 +10,12 @@ dist/
 build/
 *.egg
 
+# Frontend
+node_modules/
+.next/
+out/
+artifacts/
+
 # IDE
 .vscode/
 .idea/

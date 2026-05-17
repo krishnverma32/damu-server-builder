@@ -51,7 +51,11 @@ class AICog(commands.Cog, name="AI"):
 
         await interaction.response.defer(thinking=True)
 
-        reply = await ai_service.get_ai_response(prompt, interaction.user.id)
+        reply = await ai_service.get_ai_response(
+            prompt,
+            interaction.user.id,
+            username=interaction.user.display_name,
+        )
 
         chunks = chunk_text(reply)
         await interaction.followup.send(content=chunks[0])
@@ -67,7 +71,7 @@ class AICog(commands.Cog, name="AI"):
 
     # ── /ai_persona ───────────────────────────────────────────────────────
     @app_commands.command(name="ai_persona", description="Switch the AI's personality.")
-    @app_commands.describe(set="Persona name: default, mentor, sarcastic, professional, coder")
+    @app_commands.describe(set="Persona name: default, mentor, sarcastic, professional, coder, rukiya")
     @app_commands.choices(
         set=[
             app_commands.Choice(name="Default (helpful assistant)", value="default"),
@@ -75,6 +79,7 @@ class AICog(commands.Cog, name="AI"):
             app_commands.Choice(name="Sarcastic (witty & dry)", value="sarcastic"),
             app_commands.Choice(name="Professional (formal)", value="professional"),
             app_commands.Choice(name="Coder (software engineer)", value="coder"),
+            app_commands.Choice(name="Rukiya (live chat character)", value="rukiya"),
         ]
     )
     async def ai_persona(self, interaction: discord.Interaction, set: app_commands.Choice[str]) -> None:

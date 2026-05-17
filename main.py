@@ -34,7 +34,6 @@ Thread(target=_run_keep_alive, daemon=True).start()
 # ── Ensure data directories exist ────────────────────────────────────────
 _DATA_DIRS = [
     "data/memory",
-    "data/economy",
     "data/levels",
     "data/tickets",
     "data/templates",

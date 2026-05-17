@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #020613;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: auto;
+  background: #03040b;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #03040b;
+  color: white;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: rgba(49, 247, 255, 0.28);
+  color: white;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.noise-overlay {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 120px 120px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.dashboard-grid {
+  background-image:
+    linear-gradient(rgba(125, 211, 252, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.14) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, black, transparent 84%);
+}
+
+.cinematic-text {
+  text-shadow:
+    0 0 16px rgba(249, 196, 90, 0.5),
+    0 0 70px rgba(31, 200, 217, 0.32);
+}
+
+.hologram-border {
+  position: relative;
+}
+
+.hologram-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(249,196,90,0.95), rgba(31,200,217,0.36), rgba(79,141,255,0.7), rgba(249,196,90,0.95));
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.scanline::after {
+  animation: scan 5s linear infinite;
+  background: linear-gradient(to bottom, transparent, rgba(249, 196, 90, 0.2), transparent);
+  content: "";
+  height: 28%;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: -30%;
+}
+
+@keyframes scan {
+  to {
+    transform: translateY(480%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

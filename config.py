@@ -8,7 +8,9 @@ load_dotenv()
 # ── Core ──────────────────────────────────────────────────────────────────────
 DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+GIPHY_API_KEY: str = os.getenv("GIPHY_API_KEY", "")
 MONGO_URI: str = os.getenv("MONGO_URI", "")
+YOUTUBE_OAUTH_TOKEN_JSON: str = os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "")
 
 # ── Channel / Role IDs ───────────────────────────────────────────────────────
 MOD_LOG_CHANNEL_ID: int = int(os.getenv("MOD_LOG_CHANNEL_ID", "0"))
@@ -39,12 +41,6 @@ AI_MAX_HISTORY: int = 10
 AI_RATE_LIMIT: int = 5          # requests per minute per user
 AI_RATE_WINDOW: float = 60.0    # seconds
 
-# ── Economy ───────────────────────────────────────────────────────────────
-DAILY_REWARD: int = 200
-WORK_MIN: int = 50
-WORK_MAX: int = 250
-STARTING_BALANCE: int = 0
-CURRENCY_SYMBOL: str = "🪙"
 
 # ── Leveling ──────────────────────────────────────────────────────────────
 XP_PER_MESSAGE_MIN: int = 15
@@ -59,12 +55,11 @@ LEVEL_ROLES: dict[int, int] = {
 # ── Paths ─────────────────────────────────────────────────────────────────
 DATA_DIR: str = "data"
 MEMORY_FILE: str = f"{DATA_DIR}/memory/user_memory.json"
-WALLETS_FILE: str = f"{DATA_DIR}/economy/wallets.json"
 XP_FILE: str = f"{DATA_DIR}/levels/xp_data.json"
 TICKET_LOG_FILE: str = f"{DATA_DIR}/tickets/ticket_log.json"
 WARNINGS_FILE: str = f"{DATA_DIR}/warnings.json"
 ANALYTICS_FILE: str = f"{DATA_DIR}/analytics.json"
-SHOP_FILE: str = f"{DATA_DIR}/economy/shop.json"
+DASHBOARD_CONFIG_FILE: str = f"{DATA_DIR}/dashboard_config.json"
 
 # ── Bot Meta ──────────────────────────────────────────────────────────────
 BOT_NAME: str = "ServerBot"
