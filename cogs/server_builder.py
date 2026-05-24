@@ -507,6 +507,253 @@ TEMPLATES: dict[str, dict] = {
     },
 }
 
+TEMPLATE_CHOICES = [
+    app_commands.Choice(name="Gaming Server", value="gaming"),
+    app_commands.Choice(name="Community Server", value="community"),
+    app_commands.Choice(name="Study Group", value="study"),
+    app_commands.Choice(name="Business / Team", value="business"),
+]
+
+TEMPLATE_DETAILS: dict[str, dict[str, str]] = {
+    "gaming": {
+        "name": "Gaming Server",
+        "summary": "A complete gaming community layout with game chat, media, LFG, music, VIP voice, and staff moderation areas.",
+        "best_for": "Gaming clans, stream communities, esports groups, and casual multiplayer servers.",
+    },
+    "community": {
+        "name": "Community Server",
+        "summary": "A broad social community layout with introductions, media sharing, polls, suggestions, creative channels, voice rooms, and staff tools.",
+        "best_for": "Creators, friend groups, fan communities, and public Discord communities.",
+    },
+    "study": {
+        "name": "Study Group",
+        "summary": "A learning-focused layout with resources, questions, homework help, subject channels, tutor permissions, and focused voice rooms.",
+        "best_for": "School groups, coaching servers, coding study groups, and education communities.",
+    },
+    "business": {
+        "name": "Business / Team",
+        "summary": "A professional workspace layout with company notices, tasks, reports, departments, meeting rooms, and private management areas.",
+        "best_for": "Teams, startups, agencies, internal workspaces, and project groups.",
+    },
+}
+
+DETAILED_EXAMPLE_TEMPLATE: dict = {
+    "server_name": "Nova Creator Hub",
+    "server_font": "bold",
+    "category_font": "small_caps",
+    "channel_font": "small_caps",
+    "role_font": "bold",
+    "roles": [
+        {
+            "name": "Founder",
+            "color": "gold",
+            "hoist": True,
+            "mentionable": False,
+            "permissions": ["administrator"],
+        },
+        {
+            "name": "Admin",
+            "color": "crimson",
+            "hoist": True,
+            "mentionable": False,
+            "permissions": ["administrator"],
+        },
+        {
+            "name": "Moderator",
+            "color": "emerald",
+            "hoist": True,
+            "mentionable": True,
+            "permissions": [
+                "kick_members",
+                "ban_members",
+                "manage_messages",
+                "manage_channels",
+                "manage_threads",
+                "mute_members",
+            ],
+        },
+        {
+            "name": "Creator",
+            "color": "magenta",
+            "hoist": True,
+            "mentionable": True,
+            "permissions": ["send_messages", "read_messages", "embed_links", "attach_files"],
+        },
+        {
+            "name": "Verified Member",
+            "color": "blue",
+            "hoist": False,
+            "mentionable": False,
+            "permissions": [
+                "send_messages",
+                "read_messages",
+                "read_message_history",
+                "add_reactions",
+                "use_application_commands",
+                "connect",
+                "speak",
+            ],
+        },
+        {
+            "name": "Muted",
+            "color": "grey",
+            "hoist": False,
+            "mentionable": False,
+            "permissions": ["read_messages"],
+        },
+    ],
+    "categories": [
+        {
+            "name": "Start Here",
+            "permission_overwrites": [
+                {"role": "@everyone", "allow": ["read_messages"], "deny": ["send_messages"]},
+                {"role": "Admin", "allow": ["send_messages", "mention_everyone"], "deny": []},
+                {"role": "Moderator", "allow": ["send_messages"], "deny": []},
+            ],
+            "channels": [
+                {
+                    "type": "text",
+                    "name": "rules",
+                    "topic": "Read the rules before chatting.",
+                    "slowmode": 0,
+                    "permission_overwrites": [
+                        {"role": "@everyone", "allow": ["read_messages"], "deny": ["send_messages"]},
+                        {"role": "Admin", "allow": ["send_messages"], "deny": []},
+                    ],
+                },
+                {
+                    "type": "text",
+                    "name": "announcements",
+                    "topic": "Official server updates and launch notes.",
+                    "permission_overwrites": [
+                        {"role": "@everyone", "allow": ["read_messages"], "deny": ["send_messages"]},
+                        {"role": "Admin", "allow": ["send_messages", "mention_everyone"], "deny": []},
+                        {"role": "Moderator", "allow": ["send_messages"], "deny": []},
+                    ],
+                },
+                {
+                    "type": "text",
+                    "name": "welcome",
+                    "topic": "Welcome messages and member join notices.",
+                    "permission_overwrites": [
+                        {"role": "@everyone", "allow": ["read_messages"], "deny": ["send_messages"]},
+                    ],
+                },
+            ],
+        },
+        {
+            "name": "Community",
+            "permission_overwrites": [
+                {"role": "@everyone", "allow": [], "deny": ["read_messages"]},
+                {"role": "Verified Member", "allow": ["read_messages", "send_messages"], "deny": []},
+                {"role": "Muted", "allow": ["read_messages"], "deny": ["send_messages", "add_reactions"]},
+            ],
+            "channels": [
+                {
+                    "type": "text",
+                    "name": "general-chat",
+                    "topic": "Main community chat.",
+                    "slowmode": 2,
+                },
+                {
+                    "type": "text",
+                    "name": "media-share",
+                    "topic": "Share images, edits, clips, and screenshots.",
+                    "slowmode": 5,
+                    "permission_overwrites": [
+                        {"role": "Verified Member", "allow": ["attach_files", "embed_links"], "deny": []},
+                    ],
+                },
+                {
+                    "type": "forum",
+                    "name": "community-posts",
+                    "topic": "Create organized discussion posts.",
+                    "slowmode": 10,
+                    "thread_slowmode": 15,
+                    "auto_archive": 1440,
+                    "default_layout": "list",
+                    "default_sort_order": "latest_activity",
+                    "tags": [
+                        {"name": "Question", "emoji": "❓"},
+                        {"name": "Guide", "emoji": "📘"},
+                        {"name": "Showcase", "emoji": "✨"},
+                        {"name": "Solved", "emoji": "✅", "moderated": True},
+                    ],
+                },
+                {
+                    "type": "text",
+                    "name": "bot-commands",
+                    "topic": "Use slash commands here.",
+                    "slowmode": 3,
+                },
+            ],
+        },
+        {
+            "name": "Creator Zone",
+            "permission_overwrites": [
+                {"role": "@everyone", "allow": [], "deny": ["read_messages"]},
+                {"role": "Creator", "allow": ["read_messages", "send_messages", "attach_files", "embed_links"], "deny": []},
+                {"role": "Admin", "allow": ["manage_messages"], "deny": []},
+                {"role": "Moderator", "allow": ["manage_messages"], "deny": []},
+            ],
+            "channels": [
+                {
+                    "type": "text",
+                    "name": "creator-chat",
+                    "topic": "Private creator collaboration chat.",
+                },
+                {
+                    "type": "forum",
+                    "name": "project-showcase",
+                    "topic": "Post detailed project showcases and receive feedback.",
+                    "default_layout": "gallery",
+                    "tags": [
+                        {"name": "Website", "emoji": "🌐"},
+                        {"name": "Bot", "emoji": "🤖"},
+                        {"name": "Design", "emoji": "🎨"},
+                        {"name": "Feedback Wanted", "emoji": "💬"},
+                    ],
+                },
+            ],
+        },
+        {
+            "name": "Voice",
+            "permission_overwrites": [
+                {"role": "@everyone", "allow": [], "deny": ["read_messages", "connect"]},
+                {"role": "Verified Member", "allow": ["read_messages", "connect", "speak"], "deny": []},
+            ],
+            "channels": [
+                {"type": "voice", "name": "General Voice", "bitrate": 96000, "user_limit": 0},
+                {"type": "voice", "name": "Focus Room", "bitrate": 64000, "user_limit": 5},
+                {"type": "voice", "name": "Creator Stage", "bitrate": 96000, "user_limit": 10},
+            ],
+        },
+        {
+            "name": "Staff",
+            "permission_overwrites": [
+                {"role": "@everyone", "allow": [], "deny": ["read_messages"]},
+                {"role": "Admin", "allow": ["read_messages", "send_messages", "manage_messages"], "deny": []},
+                {"role": "Moderator", "allow": ["read_messages", "send_messages", "manage_messages"], "deny": []},
+            ],
+            "channels": [
+                {"type": "text", "name": "staff-chat", "topic": "Private staff coordination."},
+                {"type": "text", "name": "mod-log", "topic": "Moderation logs and staff notes."},
+                {"type": "text", "name": "reports", "topic": "User reports and internal actions."},
+                {"type": "voice", "name": "Staff Voice", "bitrate": 64000, "user_limit": 0},
+            ],
+        },
+    ],
+    "auto_assign": "Verified Member",
+    "verification": {
+        "enabled": True,
+        "embed_title": "Verify To Enter Nova Creator Hub",
+        "embed_description": "Welcome to **{server}**.\nRead the rules, then press Verify to unlock community channels.",
+        "button_text": "Verify",
+        "account_age_check": True,
+        "min_account_age_days": 3,
+    },
+}
+
 _GENERATION_PROMPT = (
     "Generate a structured JSON object for a Discord server with the theme: '{theme}'.\n"
     "The JSON MUST follow this exact schema:\n"
@@ -578,6 +825,58 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             parts.append(f"...and {len(overwrites) - 8} more")
 
         return "; ".join(parts)
+
+    @staticmethod
+    def _template_counts(schema: dict) -> tuple[int, int, int, int, int]:
+        roles = len(schema.get("roles", []))
+        categories = len(schema.get("categories", []))
+        text_channels = 0
+        voice_channels = 0
+        forum_channels = 0
+        for category in schema.get("categories", []):
+            for channel in category.get("channels", []):
+                channel_type = channel.get("type", "text").lower()
+                if channel_type == "voice":
+                    voice_channels += 1
+                elif channel_type == "forum":
+                    forum_channels += 1
+                else:
+                    text_channels += 1
+        return roles, categories, text_channels, voice_channels, forum_channels
+
+    def _template_detail_text(self, key: str, schema: dict) -> str:
+        metadata = TEMPLATE_DETAILS.get(key, {})
+        roles, categories, text_channels, voice_channels, forum_channels = self._template_counts(schema)
+        lines = [
+            f"Template: {metadata.get('name', key.title())}",
+            metadata.get("summary", "Ready-to-build server template."),
+            "",
+            f"Best for: {metadata.get('best_for', 'General Discord servers.')}",
+            f"Creates: {roles} roles, {categories} categories, {text_channels} text channels, {voice_channels} voice channels, {forum_channels} forum channels",
+            f"Auto-assign role: {schema.get('auto_assign') or 'none'}",
+            "",
+            "Roles:",
+        ]
+
+        for role in schema.get("roles", []):
+            perms = ", ".join(role.get("permissions", [])) or "none"
+            lines.append(
+                f"- {role.get('name', 'unnamed')} | color {role.get('color', 'default')} | perms: {perms}"
+            )
+
+        lines.extend(["", "Categories and channels:"])
+        for category in schema.get("categories", []):
+            cat_overwrites = self._format_overwrites(category.get("permission_overwrites", []))
+            lines.append(f"- {category.get('name', 'unnamed category')} | perms: {cat_overwrites}")
+            for channel in category.get("channels", []):
+                channel_type = channel.get("type", "text")
+                topic = channel.get("topic") or "No topic"
+                overwrites = self._format_overwrites(channel.get("permission_overwrites", []))
+                lines.append(
+                    f"  - [{channel_type}] {channel.get('name', 'unnamed-channel')} | {topic} | perms: {overwrites}"
+                )
+
+        return "\n".join(lines)
 
     def _build_schema_review(
         self,
@@ -1203,12 +1502,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         enable_verification="Create a verification gate with Verified/Unverified roles",
     )
     @app_commands.choices(
-        template=[
-            app_commands.Choice(name="Gaming Server", value="gaming"),
-            app_commands.Choice(name="Community Server", value="community"),
-            app_commands.Choice(name="Study Group", value="study"),
-            app_commands.Choice(name="Business / Team", value="business"),
-        ]
+        template=TEMPLATE_CHOICES
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_server(
@@ -1377,6 +1671,108 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
     # /server_json \u2014 show the JSON schema / export a template
     # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
     @app_commands.command(
+        name="server_templates",
+        description="List all available server builder templates with detailed summaries.",
+    )
+    async def server_templates(self, interaction: discord.Interaction) -> None:
+        lines = [
+            "Use `/template_details` to inspect a template, `/server_json` to export JSON, or `/setup_server` to build.",
+            "",
+        ]
+
+        for key, schema in TEMPLATES.items():
+            metadata = TEMPLATE_DETAILS.get(key, {})
+            roles, categories, text_channels, voice_channels, forum_channels = self._template_counts(schema)
+            lines.extend([
+                f"**{metadata.get('name', key.title())}** (`{key}`)",
+                metadata.get("summary", "Ready-to-build server template."),
+                f"Best for: {metadata.get('best_for', 'General Discord servers.')}",
+                (
+                    f"Includes: **{roles}** roles, **{categories}** categories, "
+                    f"**{text_channels}** text, **{voice_channels}** voice, **{forum_channels}** forum channels"
+                ),
+                f"Auto role: **{schema.get('auto_assign') or 'none'}**",
+                "",
+            ])
+
+        await interaction.response.send_message(
+            embed=info_embed("Available Server Templates", "\n".join(lines)),
+            ephemeral=True,
+        )
+
+    @app_commands.command(
+        name="template_details",
+        description="Show detailed roles, categories, channels, and permissions for one template.",
+    )
+    @app_commands.describe(template="Template to inspect in detail")
+    @app_commands.choices(template=TEMPLATE_CHOICES)
+    async def template_details(
+        self,
+        interaction: discord.Interaction,
+        template: app_commands.Choice[str],
+    ) -> None:
+        schema = TEMPLATES.get(template.value)
+        if not schema:
+            return await interaction.response.send_message(
+                embed=error_embed("Template Not Found", "That template does not exist."),
+                ephemeral=True,
+            )
+
+        detail_text = self._template_detail_text(template.value, schema)
+        metadata = TEMPLATE_DETAILS.get(template.value, {})
+        title = f"{metadata.get('name', template.name)} Details"
+        json_file = discord.File(
+            io.BytesIO(json.dumps(schema, indent=2, ensure_ascii=False).encode("utf-8")),
+            filename=f"server_template_{template.value}.json",
+        )
+
+        if len(detail_text) <= 3900:
+            embed = info_embed(title, detail_text)
+            embed.set_footer(text="Attached JSON can be edited and used with /setup_custom.")
+            await interaction.response.send_message(embed=embed, file=json_file, ephemeral=True)
+            return
+
+        detail_file = discord.File(
+            io.BytesIO(detail_text.encode("utf-8")),
+            filename=f"server_template_{template.value}_details.txt",
+        )
+        embed = info_embed(
+            title,
+            "This template has a large layout, so I attached both the detailed breakdown and the JSON file.",
+        )
+        await interaction.response.send_message(
+            embed=embed,
+            files=[detail_file, json_file],
+            ephemeral=True,
+        )
+
+    @app_commands.command(
+        name="example_template",
+        description="Get a detailed copy-ready example JSON template for /setup_custom.",
+    )
+    async def example_template(self, interaction: discord.Interaction) -> None:
+        text = json.dumps(DETAILED_EXAMPLE_TEMPLATE, indent=2, ensure_ascii=False)
+        file = discord.File(
+            io.BytesIO(text.encode("utf-8")),
+            filename="detailed_example_server_template.json",
+        )
+        roles, categories, text_channels, voice_channels, forum_channels = self._template_counts(
+            DETAILED_EXAMPLE_TEMPLATE
+        )
+        embed = info_embed(
+            "Detailed Example Template",
+            (
+                "Copy the attached JSON or upload it with `/setup_custom`.\n"
+                f"Includes **{roles}** roles, **{categories}** categories, "
+                f"**{text_channels}** text channels, **{voice_channels}** voice channels, "
+                f"**{forum_channels}** forum channels, styled names, permissions, forum tags, "
+                "and verification settings."
+            ),
+        )
+        embed.set_footer(text="This is an editable example, not a required format.")
+        await interaction.response.send_message(embed=embed, file=file, ephemeral=True)
+
+    @app_commands.command(
         name="server_json",
         description="Get the JSON schema/template you can use with /setup_custom.",
     )
@@ -1386,10 +1782,8 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
     @app_commands.choices(
         template=[
             app_commands.Choice(name="Blank Schema (empty)", value="blank"),
-            app_commands.Choice(name="Gaming Server", value="gaming"),
-            app_commands.Choice(name="Community Server", value="community"),
-            app_commands.Choice(name="Study Group", value="study"),
-            app_commands.Choice(name="Business / Team", value="business"),
+            app_commands.Choice(name="Detailed Example", value="example"),
+            *TEMPLATE_CHOICES,
         ]
     )
     async def server_json(
@@ -1527,6 +1921,9 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                 },
             }
             title = "Server JSON Schema"
+        elif choice == "example":
+            schema = DETAILED_EXAMPLE_TEMPLATE
+            title = "Detailed Example Template JSON"
         else:
             schema = TEMPLATES.get(choice)
             if not schema:
