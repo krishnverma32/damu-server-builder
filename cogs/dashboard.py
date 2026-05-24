@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import random
+from pathlib import Path
 from typing import Any, Literal
 
 import aiohttp
@@ -26,6 +27,14 @@ DEFAULT_RULES = [
     "3. Follow Discord Terms of Service.",
 ]
 
+WELCOME_ASSETS_DIR = Path(config.DATA_DIR) / "welcome_assets"
+WELCOME_IMAGE_EXTENSIONS = {
+    "image/gif": ".gif",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
 
 def _default_guild_config() -> dict[str, Any]:
     return {
@@ -36,6 +45,7 @@ def _default_guild_config() -> dict[str, Any]:
             "footer": "Enjoy your stay.",
             "thumbnail_url": "",
             "banner_url": "",
+            "banner_file": "",
             "use_giphy": False,
             "giphy_query": "welcome discord",
         },
@@ -110,6 +120,23 @@ class DashboardCog(commands.Cog, name="Dashboard"):
             .get("url", "")
         )
 
+    async def _save_welcome_image(self, guild_id: int, image: discord.Attachment) -> str:
+        content_type = (image.content_type or "").split(";")[0].lower()
+        extension = WELCOME_IMAGE_EXTENSIONS.get(content_type)
+        if extension is None:
+            lower_name = image.filename.lower()
+            extension = next(
+                (ext for ext in WELCOME_IMAGE_EXTENSIONS.values() if lower_name.endswith(ext)),
+                "",
+            )
+        if not extension:
+            raise ValueError("Unsupported image type. Use PNG, JPG, WEBP, or GIF.")
+
+        WELCOME_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+        file_path = WELCOME_ASSETS_DIR / f"{guild_id}{extension}"
+        await image.save(file_path)
+        return str(file_path)
+
     @staticmethod
     def _format_welcome_text(text: str, member: discord.Member) -> str:
         return (
@@ -164,13 +191,19 @@ class DashboardCog(commands.Cog, name="Dashboard"):
             embed.set_thumbnail(url=member.display_avatar.url)
 
         image_url = welcome.get("banner_url", "")
+        file: discord.File | None = None
         if welcome.get("use_giphy"):
             image_url = await self._random_giphy_url(welcome.get("giphy_query", "welcome discord")) or image_url
+        if not image_url and welcome.get("banner_file") and os.path.exists(welcome["banner_file"]):
+            file_name = Path(welcome["banner_file"]).name
+            file = discord.File(welcome["banner_file"], filename=file_name)
+            embed.set_image(url=f"attachment://{file_name}")
+
         if image_url:
             embed.set_image(url=image_url)
 
         try:
-            await channel.send(content=member.mention, embed=embed)
+            await channel.send(content=member.mention, embed=embed, file=file)
         except discord.HTTPException:
             log.warning("Failed to send welcome message in guild %s", member.guild.id)
 
@@ -199,6 +232,17 @@ class DashboardCog(commands.Cog, name="Dashboard"):
         giphy_query: str = "welcome discord",
     ) -> None:
         assert interaction.guild is not None
+        current_welcome = self._guild_config(interaction.guild.id).get("welcome", {})
+        banner_file = current_welcome.get("banner_file", "")
+        if image:
+            try:
+                banner_file = await self._save_welcome_image(interaction.guild.id, image)
+            except (discord.HTTPException, OSError, ValueError) as exc:
+                return await interaction.response.send_message(
+                    embed=error_embed("Image Upload Failed", str(exc)),
+                    ephemeral=True,
+                )
+
         guild_config = self._guild_config(interaction.guild.id)
         guild_config["welcome"] = {
             "channel_id": channel.id,
@@ -206,7 +250,8 @@ class DashboardCog(commands.Cog, name="Dashboard"):
             "description": description,
             "footer": footer,
             "thumbnail_url": thumbnail_url,
-            "banner_url": image.url if image else "",
+            "banner_url": "",
+            "banner_file": banner_file,
             "use_giphy": use_giphy,
             "giphy_query": giphy_query,
         }

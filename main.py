@@ -37,6 +37,7 @@ _DATA_DIRS = [
     "data/levels",
     "data/tickets",
     "data/templates",
+    "data/verification",
 ]
 for _d in _DATA_DIRS:
     pathlib.Path(_d).mkdir(parents=True, exist_ok=True)

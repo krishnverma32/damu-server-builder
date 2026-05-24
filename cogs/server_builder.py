@@ -130,11 +130,13 @@ class JsonPasteModal(discord.ui.Modal, title="Paste Server JSON"):
         cog: "ServerBuilderCog",
         clean_existing: bool,
         selected_roles: dict[str, discord.Role],
+        enable_verification: bool,
     ) -> None:
         super().__init__()
         self.cog = cog
         self.clean_existing = clean_existing
         self.selected_roles = selected_roles
+        self.enable_verification = enable_verification
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
@@ -153,6 +155,7 @@ class JsonPasteModal(discord.ui.Modal, title="Paste Server JSON"):
             selected_roles=self.selected_roles,
             title="Last Check: Pasted JSON Server",
             reason_prefix="Pasted JSON setup",
+            enable_verification=self.enable_verification,
         )
 
 # ── Preset server templates ──────────────────────────────────────────────────────
@@ -539,6 +542,7 @@ _GENERATION_PROMPT = (
     "- INFO/announcement channels: deny send_messages for @everyone, allow only for Admin/Mod\n"
     "- Staff categories: deny read_messages for @everyone, allow only for staff roles\n"
     "- Use type 'forum' for Discord forum channels when the theme needs posts/discussions\n"
+    "- Optional verification object: {\"enabled\": true, \"embed_title\": \"Verify To Enter\", \"embed_description\": \"...\", \"button_text\": \"Verify\", \"account_age_check\": false, \"min_account_age_days\": 7}\n"
     "- Optional name styling keys: font, name_font, name_style. Supported: bold, italic, bold_italic, script, bold_script, fraktur, double_struck, monospace, small_caps\n"
     "- Keep bitrate at 64000-96000 (no higher)\n"
     "Return ONLY valid JSON, no explanation."
@@ -581,12 +585,14 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         clean_existing: bool,
         server_icon: discord.Attachment | None = None,
         selected_roles: dict[str, discord.Role] | None = None,
+        enable_verification: bool = False,
     ) -> str:
         roles_count, categories_count, channels_count = self._count_schema_items(schema)
         lines = [
             f"Server name: {schema.get('server_name') or 'unchanged'}",
             f"Server icon: {'will update from upload' if server_icon else 'unchanged'}",
             f"Clean existing: {'yes' if clean_existing else 'no'}",
+            f"Verification system: {'enabled' if enable_verification else 'disabled'}",
             f"Will create: {roles_count} roles, {categories_count} categories, {channels_count} channels",
             "",
             "Roles:",
@@ -666,8 +672,15 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         clean_existing: bool,
         server_icon: discord.Attachment | None = None,
         selected_roles: dict[str, discord.Role] | None = None,
+        enable_verification: bool = False,
     ) -> bool:
-        review = self._build_schema_review(schema, clean_existing, server_icon, selected_roles)
+        review = self._build_schema_review(
+            schema,
+            clean_existing,
+            server_icon,
+            selected_roles,
+            enable_verification,
+        )
         embed = info_embed(title, review)
         embed.set_footer(text="Full JSON is attached. Confirm to start building, or cancel.")
 
@@ -729,6 +742,55 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                 "Moderator": mod_role,
             })
         return selected
+
+    @staticmethod
+    def _verification_enabled_from_schema(schema: dict, fallback: bool = False) -> bool:
+        verification = schema.get("verification")
+        if isinstance(verification, dict):
+            return bool(verification.get("enabled", fallback))
+        return fallback
+
+    async def _setup_verification_after_build(
+        self,
+        guild: discord.Guild,
+        schema: dict,
+        enable_verification: bool,
+    ) -> list[str]:
+        if not enable_verification:
+            return []
+
+        verification_cog = self.bot.get_cog("Verification")
+        if verification_cog is None or not hasattr(verification_cog, "setup_verification_system"):
+            return ["Verification setup skipped: verification cog is not loaded."]
+
+        verification = schema.get("verification") if isinstance(schema.get("verification"), dict) else {}
+        title = verification.get("embed_title") or verification.get("title") or "Verify To Enter"
+        description = (
+            verification.get("embed_description")
+            or verification.get("description")
+            or "Welcome to **{server}**.\nRead the rules, then press the button below to unlock the community."
+        )
+        button_text = verification.get("button_text") or "Verify"
+        account_age_check = bool(verification.get("account_age_check", False))
+        min_account_age_days = int(verification.get("min_account_age_days", 7) or 0)
+
+        try:
+            _, setup_logs = await verification_cog.setup_verification_system(
+                guild,
+                auto_create=True,
+                embed_title=title,
+                embed_description=description,
+                button_text=button_text,
+                account_age_check=account_age_check,
+                min_account_age_days=min_account_age_days,
+            )
+        except Exception as exc:
+            log.exception("Verification setup failed after server build: %s", exc)
+            return [f"Verification setup failed: `{exc}`"]
+
+        logs = ["Verification system enabled with verify-here, Verified, and Unverified."]
+        logs.extend(setup_logs)
+        return logs
 
     @staticmethod
     def _load_build_bypass_ids() -> set[int]:
@@ -877,6 +939,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         selected_roles: dict[str, discord.Role],
         title: str,
         reason_prefix: str,
+        enable_verification: bool | None = None,
     ) -> None:
         if not interaction.guild:
             return
@@ -885,6 +948,10 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         guild = interaction.guild
         safe_channel_id = interaction.channel_id
         protected_role_ids = {role.id for role in selected_roles.values()}
+        verification_enabled = self._verification_enabled_from_schema(
+            schema,
+            bool(enable_verification),
+        )
 
         authorized = await self._ensure_build_authorized(interaction, schema, title)
         if not authorized:
@@ -905,6 +972,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             clean_existing,
             server_icon,
             selected_roles,
+            verification_enabled,
         )
         if not confirmed:
             return
@@ -951,6 +1019,15 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             )
             if icon_log:
                 logs.insert(0, icon_log)
+            logs.extend(await self._setup_verification_after_build(guild, schema, enable_verification))
+
+            logs.extend(
+                await self._setup_verification_after_build(
+                    guild,
+                    schema,
+                    verification_enabled,
+                )
+            )
 
             assign_logs: list[str] = []
             for r in schema.get("roles", []):
@@ -1123,6 +1200,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon="Optional image to set as the server picture/icon",
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
+        enable_verification="Create a verification gate with Verified/Unverified roles",
     )
     @app_commands.choices(
         template=[
@@ -1141,6 +1219,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon: discord.Attachment | None = None,
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
+        enable_verification: bool = False,
     ) -> None:
         if not interaction.guild:
             return
@@ -1181,6 +1260,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             clean_existing,
             server_icon,
             selected_roles,
+            enable_verification,
         )
         if not confirmed:
             return
@@ -1229,6 +1309,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             )
             if icon_log:
                 logs.insert(0, icon_log)
+            logs.extend(await self._setup_verification_after_build(guild, schema, enable_verification))
 
             # \u2500\u2500 Auto-assign roles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
             assign_logs: list[str] = []
@@ -1436,6 +1517,14 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                     },
                 ],
                 "auto_assign": "Member",
+                "verification": {
+                    "enabled": True,
+                    "embed_title": "Verify To Enter",
+                    "embed_description": "Welcome to **{server}**.\nRead the rules, then press Verify to unlock the community.",
+                    "button_text": "Verify",
+                    "account_age_check": False,
+                    "min_account_age_days": 7,
+                },
             }
             title = "Server JSON Schema"
         else:
@@ -1475,6 +1564,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         clean_existing="Delete ALL existing channels/roles first (keeps command channel)",
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
+        enable_verification="Enable verification even if the pasted JSON does not include verification.enabled",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_paste_json(
@@ -1483,6 +1573,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         clean_existing: bool = False,
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
+        enable_verification: bool = False,
     ) -> None:
         selected_roles = self._selected_role_map(admin_role, mod_role)
         await interaction.response.send_modal(
@@ -1490,6 +1581,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                 cog=self,
                 clean_existing=clean_existing,
                 selected_roles=selected_roles,
+                enable_verification=enable_verification,
             )
         )
 
@@ -1581,6 +1673,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
     @app_commands.describe(
         json_text="Paste your server JSON here (or attach a .json file)",
         json_file="Upload a .json file with your server template",
+        enable_verification="Enable verification even if the JSON does not include verification.enabled",
         clean_existing="Delete ALL existing channels/roles first (keeps command channel)",
         server_icon="Optional image to set as the server picture/icon",
         admin_role="Use an existing admin role instead of creating a new one",
@@ -1596,6 +1689,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon: discord.Attachment | None = None,
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
+        enable_verification: bool = False,
     ) -> None:
         if not interaction.guild:
             return
@@ -1637,6 +1731,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             selected_roles=selected_roles,
             title="Last Check: Custom Server",
             reason_prefix="Custom setup",
+            enable_verification=enable_verification,
         )
 
         # Parse JSON
@@ -1835,6 +1930,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon="Optional image to set as the server picture/icon",
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
+        enable_verification="Create a verification gate after the AI build finishes",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def generate_server(
@@ -1845,6 +1941,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon: discord.Attachment | None = None,
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
+        enable_verification: bool = False,
     ) -> None:
         if not interaction.guild:
             return
@@ -1905,6 +2002,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             False,
             server_icon,
             selected_roles,
+            self._verification_enabled_from_schema(schema, enable_verification),
         )
         if not confirmed:
             return
@@ -1926,6 +2024,14 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             )
             if icon_log:
                 logs.insert(0, icon_log)
+            ai_verification_enabled = self._verification_enabled_from_schema(schema, enable_verification)
+            logs.extend(
+                await self._setup_verification_after_build(
+                    interaction.guild,
+                    schema,
+                    ai_verification_enabled,
+                )
+            )
 
             # Auto-assign roles
             auto_role_name = schema.get("auto_assign")

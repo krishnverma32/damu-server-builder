@@ -60,6 +60,7 @@ TICKET_LOG_FILE: str = f"{DATA_DIR}/tickets/ticket_log.json"
 WARNINGS_FILE: str = f"{DATA_DIR}/warnings.json"
 ANALYTICS_FILE: str = f"{DATA_DIR}/analytics.json"
 DASHBOARD_CONFIG_FILE: str = f"{DATA_DIR}/dashboard_config.json"
+VERIFICATION_CONFIG_FILE: str = f"{DATA_DIR}/verification_config.json"
 
 # ── Bot Meta ──────────────────────────────────────────────────────────────
 BOT_NAME: str = "ServerBot"
