@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import io
 import logging
 import platform
 
@@ -159,6 +160,66 @@ class UtilityCog(commands.Cog, name="Utility"):
         msg = await interaction.original_response()
         for i in range(len(items)):
             await msg.add_reaction(number_emojis[i])
+
+    @app_commands.command(name="send_rules", description="Send a rules embed with an optional uploaded image.")
+    @app_commands.describe(
+        channel="Channel where the rules embed should be posted",
+        title="Rules embed title",
+        rules="Rules text. Use new lines or separate rules with |",
+        image="Optional uploaded rules/banner image",
+        footer="Optional footer text",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def send_rules(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel | None = None,
+        title: str = "Server Rules",
+        rules: str = "1. Respect everyone.\n2. No spam or harassment.\n3. Follow Discord Terms of Service.",
+        image: discord.Attachment | None = None,
+        footer: str = "Please follow the rules to keep the server safe.",
+    ) -> None:
+        if not interaction.guild:
+            return
+
+        target = channel or interaction.channel
+        if not isinstance(target, discord.TextChannel):
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid Channel", "Choose a text channel for the rules embed."),
+                ephemeral=True,
+            )
+
+        rules_text = rules.replace("|", "\n")
+        embed = info_embed(title, rules_text)
+        embed.set_footer(text=footer)
+        if interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+
+        file: discord.File | None = None
+        if image:
+            content_type = (image.content_type or "").lower()
+            allowed_ext = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+            if not content_type.startswith("image/") and not image.filename.lower().endswith(allowed_ext):
+                return await interaction.response.send_message(
+                    embed=error_embed("Invalid Image", "Upload a PNG, JPG, GIF, or WEBP image."),
+                    ephemeral=True,
+                )
+            image_bytes = await image.read()
+            file = discord.File(io.BytesIO(image_bytes), filename=image.filename)
+            embed.set_image(url=f"attachment://{image.filename}")
+
+        try:
+            await target.send(embed=embed, file=file)
+        except discord.HTTPException as exc:
+            return await interaction.response.send_message(
+                embed=error_embed("Rules Send Failed", f"Discord rejected the message.\n`{exc}`"),
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            embed=success_embed("Rules Posted", f"Rules embed sent in {target.mention}."),
+            ephemeral=True,
+        )
 
     # ── /remind ───────────────────────────────────────────────────────────
     @app_commands.command(name="remind", description="Set a DM reminder.")

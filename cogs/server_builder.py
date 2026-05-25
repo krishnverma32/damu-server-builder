@@ -14,12 +14,13 @@ from discord.ext import commands
 import config
 from services import ai_service
 from services.embed_service import error_embed, info_embed, success_embed
-from services.json_builder import _style_text, build_server
+from services.json_builder import _resolve_permissions, _style_text, build_server
 
 log = logging.getLogger("cogs.server_builder")
 
 MAX_SERVER_ICON_BYTES = 10 * 1024 * 1024
 BYPASS_FILE = pathlib.Path(config.DATA_DIR) / "server_builder_bypass.json"
+LAST_SCHEMA_FILE = pathlib.Path(config.DATA_DIR) / "server_builder_last_schema.json"
 
 
 class BuildConfirmView(discord.ui.View):
@@ -131,12 +132,14 @@ class JsonPasteModal(discord.ui.Modal, title="Paste Server JSON"):
         clean_existing: bool,
         selected_roles: dict[str, discord.Role],
         enable_verification: bool,
+        perm_sync_after_build: bool,
     ) -> None:
         super().__init__()
         self.cog = cog
         self.clean_existing = clean_existing
         self.selected_roles = selected_roles
         self.enable_verification = enable_verification
+        self.perm_sync_after_build = perm_sync_after_build
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
@@ -156,6 +159,7 @@ class JsonPasteModal(discord.ui.Modal, title="Paste Server JSON"):
             title="Last Check: Pasted JSON Server",
             reason_prefix="Pasted JSON setup",
             enable_verification=self.enable_verification,
+            perm_sync_after_build=self.perm_sync_after_build,
         )
 
 # ── Preset server templates ──────────────────────────────────────────────────────
@@ -827,6 +831,191 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         return "; ".join(parts)
 
     @staticmethod
+    def _schema_style(schema: dict, kind: str) -> str | None:
+        global_font = schema.get("font") or schema.get("name_font") or schema.get("name_style")
+        return schema.get(f"{kind}_font") or global_font
+
+    @staticmethod
+    def _styled_schema_name(data: dict, fallback_style: str | None = None) -> str:
+        style = data.get("font") or data.get("name_font") or data.get("name_style") or fallback_style
+        return _style_text(data.get("name", ""), style)
+
+    @staticmethod
+    def _perm_names_missing(actual: discord.Permissions, expected_names: list[str]) -> list[str]:
+        expected = _resolve_permissions(expected_names)
+        missing: list[str] = []
+        for name in expected_names:
+            flag = getattr(discord.Permissions, name.lower(), None)
+            if flag is None:
+                continue
+            value = flag.flag
+            if expected.value & value and not actual.value & value:
+                missing.append(name)
+        return missing
+
+    def _load_last_schema(self, guild_id: int) -> dict | None:
+        try:
+            if not LAST_SCHEMA_FILE.exists():
+                return None
+            data = json.loads(LAST_SCHEMA_FILE.read_text(encoding="utf-8"))
+            schema = data.get(str(guild_id))
+            return schema if isinstance(schema, dict) else None
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
+
+    def _save_last_schema(self, guild_id: int, schema: dict) -> None:
+        try:
+            LAST_SCHEMA_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if LAST_SCHEMA_FILE.exists():
+                data = json.loads(LAST_SCHEMA_FILE.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    data = {}
+            data[str(guild_id)] = schema
+            LAST_SCHEMA_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except (OSError, json.JSONDecodeError, TypeError):
+            log.warning("Could not save last server schema for guild %s", guild_id)
+
+    def _resolve_schema_role(
+        self,
+        guild: discord.Guild,
+        role_map: dict[str, discord.Role],
+        role_name: str,
+        role_style: str | None,
+    ) -> discord.Role | None:
+        if role_name.lower() == "@everyone":
+            return guild.default_role
+        if role_name in role_map:
+            return role_map[role_name]
+        styled_name = _style_text(role_name, role_style)
+        role = discord.utils.get(guild.roles, name=role_name) or discord.utils.get(guild.roles, name=styled_name)
+        if role:
+            role_map[role_name] = role
+            role_map[styled_name] = role
+        return role
+
+    async def _audit_schema_permissions(self, guild: discord.Guild, schema: dict) -> tuple[bool, list[str]]:
+        issues: list[str] = []
+        role_style = self._schema_style(schema, "role")
+        category_style = self._schema_style(schema, "category")
+        channel_style = self._schema_style(schema, "channel")
+        role_map: dict[str, discord.Role] = {}
+
+        for role_data in schema.get("roles", []):
+            role_name = role_data.get("name")
+            if not role_name:
+                continue
+            styled_name = self._styled_schema_name(role_data, role_style)
+            role = discord.utils.get(guild.roles, name=role_name) or discord.utils.get(guild.roles, name=styled_name)
+            if not role:
+                issues.append(f"Missing role: `{role_name}`")
+                continue
+            role_map[role_name] = role
+            role_map[styled_name] = role
+            missing = self._perm_names_missing(role.permissions, role_data.get("permissions", []))
+            if missing:
+                issues.append(f"Role `{role.name}` missing permissions: {', '.join(missing)}")
+
+        for cat_data in schema.get("categories", []):
+            category_name = self._styled_schema_name(cat_data, category_style)
+            category = discord.utils.get(guild.categories, name=category_name)
+            if not category:
+                issues.append(f"Missing category: `{cat_data.get('name', 'unnamed')}`")
+                continue
+
+            self._audit_overwrites(guild, category, cat_data.get("permission_overwrites", []), role_map, role_style, issues)
+
+            for ch_data in cat_data.get("channels", []):
+                channel_name = self._styled_schema_name(ch_data, channel_style)
+                channel = discord.utils.get(category.channels, name=channel_name)
+                if not channel:
+                    issues.append(f"Missing channel: `{channel_name}` in `{category.name}`")
+                    continue
+                expected_type = ch_data.get("type", "text").lower()
+                if expected_type == "voice" and not isinstance(channel, discord.VoiceChannel):
+                    issues.append(f"Channel `{channel.name}` should be voice.")
+                elif expected_type == "forum" and not isinstance(channel, discord.ForumChannel):
+                    issues.append(f"Channel `{channel.name}` should be forum.")
+                elif expected_type not in {"voice", "forum"} and not isinstance(channel, discord.TextChannel):
+                    issues.append(f"Channel `{channel.name}` should be text.")
+                self._audit_overwrites(guild, channel, ch_data.get("permission_overwrites", []), role_map, role_style, issues)
+
+        return not issues, issues
+
+    def _audit_overwrites(
+        self,
+        guild: discord.Guild,
+        channel: discord.abc.GuildChannel,
+        overwrites: list[dict],
+        role_map: dict[str, discord.Role],
+        role_style: str | None,
+        issues: list[str],
+    ) -> None:
+        for overwrite in overwrites:
+            role_name = overwrite.get("role", "")
+            target = self._resolve_schema_role(guild, role_map, role_name, role_style)
+            if not target:
+                issues.append(f"`{channel.name}` overwrite target missing: `{role_name}`")
+                continue
+            actual = channel.overwrites_for(target)
+            allow, deny = actual.pair()
+            missing_allow = self._perm_names_missing(allow, overwrite.get("allow", []))
+            missing_deny = self._perm_names_missing(deny, overwrite.get("deny", []))
+            if missing_allow:
+                issues.append(f"`{channel.name}` missing allow for `{target.name}`: {', '.join(missing_allow)}")
+            if missing_deny:
+                issues.append(f"`{channel.name}` missing deny for `{target.name}`: {', '.join(missing_deny)}")
+
+    async def _dm_perm_sync_result(
+        self,
+        guild: discord.Guild,
+        schema: dict,
+        ok: bool,
+        issues: list[str],
+        context: str,
+    ) -> None:
+        owner = guild.owner or await self.bot.fetch_user(guild.owner_id)
+        roles, categories, text_channels, voice_channels, forum_channels = self._template_counts(schema)
+        base = [
+            f"Server: **{guild.name}** (`{guild.id}`)",
+            f"Owner: <@{guild.owner_id}>",
+            f"Members: **{guild.member_count or 0}**",
+            f"JSON expected: **{roles}** roles, **{categories}** categories, **{text_channels}** text, **{voice_channels}** voice, **{forum_channels}** forum",
+            f"Actual: **{len(guild.roles)}** roles, **{len(guild.categories)}** categories, **{len(guild.text_channels)}** text, **{len(guild.voice_channels)}** voice, **{len(guild.forums)}** forums",
+        ]
+        if ok:
+            embed = success_embed("Perm Sync OK OK", "\n".join(base + [f"Context: **{context}**", "Permissions match the JSON checks."]))
+        else:
+            shown = "\n".join(f"- {issue}" for issue in issues[:20])
+            extra = f"\n...and {len(issues) - 20} more issues." if len(issues) > 20 else ""
+            embed = error_embed(
+                "Perm Sync Issues Found",
+                "\n".join(base + [f"Context: **{context}**", "", shown + extra]),
+            )
+        try:
+            await owner.send(embed=embed)
+        except discord.HTTPException:
+            log.warning("Could not DM permission sync result to guild owner %s", guild.owner_id)
+
+    async def _run_perm_sync_report(
+        self,
+        guild: discord.Guild,
+        schema: dict,
+        context: str,
+        *,
+        dm_owner: bool = True,
+    ) -> tuple[bool, list[str], str]:
+        ok, issues = await self._audit_schema_permissions(guild, schema)
+        if dm_owner:
+            await self._dm_perm_sync_result(guild, schema, ok, issues, context)
+        if ok:
+            return True, issues, "Perm Sync OK OK. Server permissions match the JSON checks."
+        shown = "\n".join(f"- {issue}" for issue in issues[:12])
+        if len(issues) > 12:
+            shown += f"\n...and {len(issues) - 12} more issues."
+        return False, issues, f"Perm sync found problems. Check JSON vs actual server:\n{shown}"
+
+    @staticmethod
     def _template_counts(schema: dict) -> tuple[int, int, int, int, int]:
         roles = len(schema.get("roles", []))
         categories = len(schema.get("categories", []))
@@ -1239,6 +1428,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         title: str,
         reason_prefix: str,
         enable_verification: bool | None = None,
+        perm_sync_after_build: bool = True,
     ) -> None:
         if not interaction.guild:
             return
@@ -1318,7 +1508,6 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             )
             if icon_log:
                 logs.insert(0, icon_log)
-            logs.extend(await self._setup_verification_after_build(guild, schema, enable_verification))
 
             logs.extend(
                 await self._setup_verification_after_build(
@@ -1327,6 +1516,10 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                     verification_enabled,
                 )
             )
+            self._save_last_schema(guild.id, schema)
+            if perm_sync_after_build:
+                ok, _, sync_text = await self._run_perm_sync_report(guild, schema, reason_prefix)
+                logs.append("Perm Sync OK OK. Owner DM sent." if ok else sync_text)
 
             assign_logs: list[str] = []
             for r in schema.get("roles", []):
@@ -1500,6 +1693,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
         enable_verification="Create a verification gate with Verified/Unverified roles",
+        perm_sync_after_build="After build, check JSON roles/channel permissions and DM the owner",
     )
     @app_commands.choices(
         template=TEMPLATE_CHOICES
@@ -1514,6 +1708,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
         enable_verification: bool = False,
+        perm_sync_after_build: bool = True,
     ) -> None:
         if not interaction.guild:
             return
@@ -1604,6 +1799,10 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             if icon_log:
                 logs.insert(0, icon_log)
             logs.extend(await self._setup_verification_after_build(guild, schema, enable_verification))
+            self._save_last_schema(guild.id, schema)
+            if perm_sync_after_build:
+                ok, _, sync_text = await self._run_perm_sync_report(guild, schema, f"{template.name} template")
+                logs.append("Perm Sync OK OK. Owner DM sent." if ok else sync_text)
 
             # \u2500\u2500 Auto-assign roles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
             assign_logs: list[str] = []
@@ -1962,6 +2161,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
         enable_verification="Enable verification even if the pasted JSON does not include verification.enabled",
+        perm_sync_after_build="After build, check JSON roles/channel permissions and DM the owner",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_paste_json(
@@ -1971,6 +2171,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
         enable_verification: bool = False,
+        perm_sync_after_build: bool = True,
     ) -> None:
         selected_roles = self._selected_role_map(admin_role, mod_role)
         await interaction.response.send_modal(
@@ -1979,6 +2180,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                 clean_existing=clean_existing,
                 selected_roles=selected_roles,
                 enable_verification=enable_verification,
+                perm_sync_after_build=perm_sync_after_build,
             )
         )
 
@@ -2075,6 +2277,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         server_icon="Optional image to set as the server picture/icon",
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
+        perm_sync_after_build="After build, check JSON roles/channel permissions and DM the owner",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_custom(
@@ -2087,6 +2290,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
         enable_verification: bool = False,
+        perm_sync_after_build: bool = True,
     ) -> None:
         if not interaction.guild:
             return
@@ -2129,6 +2333,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
             title="Last Check: Custom Server",
             reason_prefix="Custom setup",
             enable_verification=enable_verification,
+            perm_sync_after_build=perm_sync_after_build,
         )
 
         # Parse JSON
@@ -2318,6 +2523,85 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
     # /generate_server \u2014 AI-powered server builder
     # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
     @app_commands.command(
+        name="perm_sync_check",
+        description="Check current server roles/channel permissions against JSON or the last build.",
+    )
+    @app_commands.describe(
+        template="Optional preset/example template to compare against",
+        json_text="Optional pasted JSON to compare against",
+        json_file="Optional uploaded .json file to compare against",
+        dm_owner="Send the result to the server owner by DM",
+    )
+    @app_commands.choices(
+        template=[
+            app_commands.Choice(name="Last Build JSON", value="last"),
+            app_commands.Choice(name="Detailed Example", value="example"),
+            *TEMPLATE_CHOICES,
+        ]
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def perm_sync_check(
+        self,
+        interaction: discord.Interaction,
+        template: app_commands.Choice[str] | None = None,
+        json_text: str | None = None,
+        json_file: discord.Attachment | None = None,
+        dm_owner: bool = True,
+    ) -> None:
+        if not interaction.guild:
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        schema: dict | None = None
+        source = "last build JSON"
+
+        if json_file:
+            if not json_file.filename.endswith(".json"):
+                return await interaction.followup.send(
+                    embed=error_embed("Invalid File", "Please upload a `.json` file."),
+                    ephemeral=True,
+                )
+            try:
+                schema = self._parse_server_schema((await json_file.read()).decode("utf-8"))
+                source = f"uploaded file `{json_file.filename}`"
+            except (UnicodeDecodeError, ValueError) as exc:
+                return await interaction.followup.send(embed=error_embed("Invalid JSON", str(exc)), ephemeral=True)
+        elif json_text:
+            try:
+                schema = self._parse_server_schema(json_text)
+                source = "pasted JSON"
+            except ValueError as exc:
+                return await interaction.followup.send(embed=error_embed("Invalid JSON", str(exc)), ephemeral=True)
+        elif template and template.value == "example":
+            schema = DETAILED_EXAMPLE_TEMPLATE
+            source = "Detailed Example template"
+        elif template and template.value != "last":
+            schema = TEMPLATES.get(template.value)
+            source = f"{template.name} template"
+        else:
+            schema = self._load_last_schema(interaction.guild.id)
+
+        if not schema:
+            return await interaction.followup.send(
+                embed=error_embed(
+                    "No JSON Available",
+                    "I do not have a saved build JSON for this server yet. Use `json_text`, `json_file`, or choose a template.",
+                ),
+                ephemeral=True,
+            )
+
+        ok, issues, sync_text = await self._run_perm_sync_report(
+            interaction.guild,
+            schema,
+            source,
+            dm_owner=dm_owner,
+        )
+        embed = success_embed("Perm Sync OK OK", sync_text) if ok else error_embed("Perm Sync Issues", sync_text)
+        embed.add_field(name="Source", value=source, inline=False)
+        embed.add_field(name="Issues", value=str(len(issues)), inline=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @app_commands.command(
         name="generate_server",
         description="Generate and build a server from an AI-generated template.",
     )
@@ -2328,6 +2612,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role="Use an existing admin role instead of creating a new one",
         mod_role="Use an existing moderator role instead of creating a new one",
         enable_verification="Create a verification gate after the AI build finishes",
+        perm_sync_after_build="After build, check JSON roles/channel permissions and DM the owner",
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def generate_server(
@@ -2339,6 +2624,7 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
         admin_role: discord.Role | None = None,
         mod_role: discord.Role | None = None,
         enable_verification: bool = False,
+        perm_sync_after_build: bool = True,
     ) -> None:
         if not interaction.guild:
             return
@@ -2429,6 +2715,10 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
                     ai_verification_enabled,
                 )
             )
+            self._save_last_schema(interaction.guild.id, schema)
+            if perm_sync_after_build:
+                ok, _, sync_text = await self._run_perm_sync_report(interaction.guild, schema, "AI generated server")
+                logs.append("Perm Sync OK OK. Owner DM sent." if ok else sync_text)
 
             # Auto-assign roles
             auto_role_name = schema.get("auto_assign")
