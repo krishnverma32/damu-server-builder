@@ -22,6 +22,7 @@ DEV_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("DEV_IDS", "").split(",") if i.strip()
 ]
 SERVER_BUILD_OWNER_ID: int = int(os.getenv("SERVER_BUILD_OWNER_ID", "486555340670894080"))
+BOT_OWNER_ID: int = int(os.getenv("BOT_OWNER_ID", str(SERVER_BUILD_OWNER_ID)))
 SERVER_BUILD_BYPASS_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("SERVER_BUILD_BYPASS_IDS", "").split(",") if i.strip()
 ]
@@ -61,6 +62,7 @@ WARNINGS_FILE: str = f"{DATA_DIR}/warnings.json"
 ANALYTICS_FILE: str = f"{DATA_DIR}/analytics.json"
 DASHBOARD_CONFIG_FILE: str = f"{DATA_DIR}/dashboard_config.json"
 VERIFICATION_CONFIG_FILE: str = f"{DATA_DIR}/verification_config.json"
+AUTOMOD_FILE: str = f"{DATA_DIR}/automod/offenses.json"
 
 # ── Bot Meta ──────────────────────────────────────────────────────────────
 BOT_NAME: str = "ServerBot"
