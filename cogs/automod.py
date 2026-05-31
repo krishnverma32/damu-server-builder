@@ -39,6 +39,7 @@ class AutoModCog(commands.Cog, name="AutoMod"):
         self.bot = bot
         self._image_windows: dict[tuple[int, int], deque[tuple[float, int]]] = defaultdict(deque)
         self._offenses: dict[str, Any] = {}
+        self._settings: dict[str, Any] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
 
@@ -49,15 +50,22 @@ class AutoModCog(commands.Cog, name="AutoMod"):
             try:
                 async with aiofiles.open(config.AUTOMOD_FILE, "r", encoding="utf-8") as f:
                     raw = await f.read()
-                self._offenses = json.loads(raw) if raw.strip() else {}
+                data = json.loads(raw) if raw.strip() else {}
+                if "offenses" in data or "settings" in data:
+                    self._offenses = data.get("offenses", {})
+                    self._settings = data.get("settings", {})
+                else:
+                    self._offenses = data
+                    self._settings = {}
             except (OSError, json.JSONDecodeError):
                 self._offenses = {}
+                self._settings = {}
         self._loaded = True
 
     async def _save(self) -> None:
         os.makedirs(os.path.dirname(config.AUTOMOD_FILE), exist_ok=True)
         async with aiofiles.open(config.AUTOMOD_FILE, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(self._offenses, indent=2))
+            await f.write(json.dumps({"offenses": self._offenses, "settings": self._settings}, indent=2))
 
     @staticmethod
     def _key(guild_id: int, user_id: int) -> str:
@@ -73,6 +81,22 @@ class AutoModCog(commands.Cog, name="AutoMod"):
     def _is_exempt(member: discord.Member) -> bool:
         perms = member.guild_permissions
         return perms.administrator or perms.manage_guild or perms.manage_messages
+
+    def _guild_settings(self, guild_id: int) -> dict[str, list[int]]:
+        key = str(guild_id)
+        settings = self._settings.setdefault(key, {})
+        settings.setdefault("ignored_channel_ids", [])
+        settings.setdefault("bypass_role_ids", [])
+        return settings
+
+    def _is_ignored_channel(self, guild_id: int, channel_id: int) -> bool:
+        settings = self._guild_settings(guild_id)
+        return channel_id in set(settings.get("ignored_channel_ids", []))
+
+    def _has_bypass_role(self, guild_id: int, member: discord.Member) -> bool:
+        settings = self._guild_settings(guild_id)
+        bypass_ids = set(settings.get("bypass_role_ids", []))
+        return any(role.id in bypass_ids for role in member.roles)
 
     def _count_recent_images(self, guild_id: int, user_id: int, image_count: int) -> int:
         now = time.monotonic()
@@ -188,7 +212,12 @@ class AutoModCog(commands.Cog, name="AutoMod"):
     async def on_message(self, message: discord.Message) -> None:
         if not message.guild or not isinstance(message.author, discord.Member):
             return
+        await self._load()
+        if self._is_ignored_channel(message.guild.id, message.channel.id):
+            return
         if message.author.bot or self._is_exempt(message.author):
+            return
+        if self._has_bypass_role(message.guild.id, message.author):
             return
 
         if LINK_RE.search(message.content or ""):
@@ -212,6 +241,9 @@ class AutoModCog(commands.Cog, name="AutoMod"):
         await self._load()
         prefix = f"{interaction.guild.id}:"
         total = sum(1 for key in self._offenses if key.startswith(prefix))
+        settings = self._guild_settings(interaction.guild.id)
+        ignored_channels = settings.get("ignored_channel_ids", [])
+        bypass_roles = settings.get("bypass_role_ids", [])
         embed = info_embed(
             "AutoMod Status",
             (
@@ -219,10 +251,89 @@ class AutoModCog(commands.Cog, name="AutoMod"):
                 "**Deletes:** links, image bursts over 3 images in 1 second\n"
                 "**First offense:** delete + warn\n"
                 "**Repeat offense:** 10 minute timeout + DM server owner and bot owner\n"
-                f"**Tracked users in this server:** {total}"
+                f"**Tracked users in this server:** {total}\n"
+                f"**Ignored channels:** {len(ignored_channels)}\n"
+                f"**Bypass roles:** {len(bypass_roles)}"
             ),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="automod_exception", description="Add, remove, or list AutoMod exception channels/roles by ID.")
+    @app_commands.describe(
+        action="Add, remove, or list exceptions",
+        target="Whether this is a channel exception or role bypass",
+        id_value="Channel ID or role ID. Not needed for list.",
+    )
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="Add", value="add"),
+            app_commands.Choice(name="Remove", value="remove"),
+            app_commands.Choice(name="List", value="list"),
+        ],
+        target=[
+            app_commands.Choice(name="Ignored Channel", value="channel"),
+            app_commands.Choice(name="Bypass Role", value="role"),
+        ],
+    )
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def automod_exception(
+        self,
+        interaction: discord.Interaction,
+        action: app_commands.Choice[str],
+        target: app_commands.Choice[str],
+        id_value: str | None = None,
+    ) -> None:
+        if not interaction.guild:
+            return
+        await self._load()
+        settings = self._guild_settings(interaction.guild.id)
+        key = "ignored_channel_ids" if target.value == "channel" else "bypass_role_ids"
+
+        if action.value == "list":
+            channel_lines = [
+                f"- <#{channel_id}> (`{channel_id}`)" for channel_id in settings.get("ignored_channel_ids", [])
+            ]
+            role_lines = [
+                f"- <@&{role_id}> (`{role_id}`)" for role_id in settings.get("bypass_role_ids", [])
+            ]
+            text = (
+                "**Ignored Channels**\n"
+                f"{chr(10).join(channel_lines) if channel_lines else 'None'}\n\n"
+                "**Bypass Roles**\n"
+                f"{chr(10).join(role_lines) if role_lines else 'None'}"
+            )
+            return await interaction.response.send_message(
+                embed=info_embed("AutoMod Exceptions", text),
+                ephemeral=True,
+            )
+
+        if not id_value or not id_value.strip().isdigit():
+            return await interaction.response.send_message(
+                embed=error_embed("Invalid ID", "Give a numeric channel ID or role ID."),
+                ephemeral=True,
+            )
+
+        item_id = int(id_value.strip())
+        values = set(settings.get(key, []))
+        if action.value == "add":
+            values.add(item_id)
+            verb = "added to"
+        else:
+            values.discard(item_id)
+            verb = "removed from"
+
+        settings[key] = sorted(values)
+        async with self._lock:
+            await self._save()
+
+        mention = f"<#{item_id}>" if target.value == "channel" else f"<@&{item_id}>"
+        await interaction.response.send_message(
+            embed=success_embed(
+                "AutoMod Exception Updated",
+                f"{mention} (`{item_id}`) {verb} AutoMod {'ignored channels' if target.value == 'channel' else 'bypass roles'}.",
+            ),
+            ephemeral=True,
+        )
 
     @app_commands.command(name="automod_reset", description="Reset AutoMod offenses for a member.")
     @app_commands.describe(user="Member whose AutoMod offenses should be cleared")
