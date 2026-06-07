@@ -12,6 +12,7 @@ from discord.ext import commands
 from flask import Flask
 
 import config
+from services.database import get_database
 from utils.logger import setup_logging
 
 # ── Keep-alive server for Render free tier ────────────────────────────────
@@ -68,9 +69,13 @@ class ServerBot(commands.Bot):
         )
         self.start_time: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
         self.failed_cogs: dict[str, str] = {}
+        self.db = get_database()
 
     async def setup_hook(self) -> None:
         """Load all cogs dynamically from the cogs/ directory."""
+        await self.db.create_tables()
+        log.info("SQLite database ready: %s", config.DATABASE_FILE)
+
         cog_dir = pathlib.Path("cogs")
         for cog_file in cog_dir.glob("*.py"):
             if cog_file.name.startswith("_") or cog_file.name == "__init__.py":

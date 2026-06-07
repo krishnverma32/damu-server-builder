@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 import re
 from typing import Any
 
-import aiofiles
 import aiohttp
 
 import config
+from services.database import get_database
 
 log = logging.getLogger("services.ai")
 
@@ -387,26 +385,29 @@ _loaded: bool = False
 
 
 async def _ensure_loaded() -> None:
-    """Load memory from disk once."""
+    """Load memory from SQLite once."""
     global _memory, _loaded
     if _loaded:
         return
-    if os.path.exists(config.MEMORY_FILE):
-        try:
-            async with aiofiles.open(config.MEMORY_FILE, "r", encoding="utf-8") as f:
-                raw = await f.read()
-                _memory = json.loads(raw) if raw.strip() else {}
-        except Exception as exc:
-            log.warning("Could not load memory file: %s", exc)
-            _memory = {}
+    try:
+        db = get_database()
+        await db.create_tables()
+        keys = await db.list_keys("ai_memory")
+        _memory = {
+            key: await db.get("ai_memory", key, {"persona": "default", "history": []})
+            for key in keys
+        }
+    except Exception as exc:
+        log.warning("Could not load AI memory from SQLite: %s", exc)
+        _memory = {}
     _loaded = True
 
 
 async def _save_memory() -> None:
-    """Persist memory to disk."""
-    os.makedirs(os.path.dirname(config.MEMORY_FILE), exist_ok=True)
-    async with aiofiles.open(config.MEMORY_FILE, "w", encoding="utf-8") as f:
-        await f.write(json.dumps(_memory, indent=2))
+    """Persist memory to SQLite."""
+    db = get_database()
+    for key, value in _memory.items():
+        await db.set("ai_memory", key, value)
 
 
 def _user_key(user_id: int) -> str:

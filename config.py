@@ -55,6 +55,7 @@ LEVEL_ROLES: dict[int, int] = {
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 DATA_DIR: str = "data"
+DATABASE_FILE: str = os.getenv("DATABASE_FILE", f"{DATA_DIR}/bot.db")
 MEMORY_FILE: str = f"{DATA_DIR}/memory/user_memory.json"
 XP_FILE: str = f"{DATA_DIR}/levels/xp_data.json"
 TICKET_LOG_FILE: str = f"{DATA_DIR}/tickets/ticket_log.json"
