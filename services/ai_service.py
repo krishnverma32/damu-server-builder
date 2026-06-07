@@ -560,8 +560,12 @@ def _validate_rukiya_response(
 
 
 async def get_ai_response(
-    prompt: str, user_id: int, persona: str = "default", username: str | None = None
-) -> str:
+    prompt: str,
+    user_id: int,
+    persona: str = "default",
+    username: str | None = None,
+    return_usage: bool = False,
+) -> str | tuple[str, int]:
     """Send *prompt* to OpenRouter and return the assistant reply.
 
     Maintains per-user conversation history (max ``config.AI_MAX_HISTORY`` exchanges).
@@ -609,6 +613,7 @@ async def get_ai_response(
 
     reply: str = ""
     last_error: str = "Unknown error"
+    tokens_used = 0
 
     async with aiohttp.ClientSession() as session:
         for model in models_to_try:
@@ -623,6 +628,13 @@ async def get_ai_response(
                         if resp.status == 200:
                             choice = data.get("choices", [{}])[0]
                             reply = choice.get("message", {}).get("content", "")
+                            usage = data.get("usage") or {}
+                            tokens_used = int(
+                                usage.get("total_tokens")
+                                or usage.get("completion_tokens")
+                                or usage.get("prompt_tokens")
+                                or 0
+                            )
                             if reply:
                                 log.info("AI response from %s (%d tokens)", model, len(reply.split()))
                                 break
@@ -653,7 +665,8 @@ async def get_ai_response(
                 break
 
     if not reply:
-        return f"\u26a0\ufe0f AI error: {last_error}"
+        error = f"\u26a0\ufe0f AI error: {last_error}"
+        return (error, 0) if return_usage else error
 
     if active_persona == "rukiya":
         reply = _validate_rukiya_response(reply, message_type, user_data["history"])
@@ -665,7 +678,7 @@ async def get_ai_response(
         user_data["history"] = user_data["history"][-(config.AI_MAX_HISTORY * 2) :]
 
     await _save_memory()
-    return reply
+    return (reply, tokens_used) if return_usage else reply
 
 
 async def reset_user_memory(user_id: int) -> None:

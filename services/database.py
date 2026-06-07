@@ -53,6 +53,18 @@ class Database:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS ai_usage (
+                guild_id TEXT NOT NULL DEFAULT '0',
+                user_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, user_id, date)
+            )
+            """
+        )
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS levels (
                 guild_id TEXT NOT NULL,
                 user_id TEXT NOT NULL,

@@ -41,6 +41,8 @@ AI_MAX_RETRIES: int = 2
 AI_MAX_HISTORY: int = 10
 AI_RATE_LIMIT: int = 5          # requests per minute per user
 AI_RATE_WINDOW: float = 60.0    # seconds
+AI_USER_DAILY_LIMIT: int = int(os.getenv("AI_USER_DAILY_LIMIT", "10000"))
+AI_DAILY_TOKEN_LIMIT: int = int(os.getenv("AI_DAILY_TOKEN_LIMIT", "100000"))
 
 
 # ── Leveling ──────────────────────────────────────────────────────────────
