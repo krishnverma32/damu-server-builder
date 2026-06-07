@@ -67,23 +67,24 @@ class ServerBot(commands.Bot):
             ),
         )
         self.start_time: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
+        self.failed_cogs: dict[str, str] = {}
 
     async def setup_hook(self) -> None:
         """Load all cogs dynamically from the cogs/ directory."""
         cog_dir = pathlib.Path("cogs")
         for cog_file in cog_dir.glob("*.py"):
-            if cog_file.name.startswith("_"):
+            if cog_file.name.startswith("_") or cog_file.name == "__init__.py":
                 continue
             ext = f"cogs.{cog_file.stem}"
             try:
                 await self.load_extension(ext)
+                self.failed_cogs.pop(ext, None)
                 log.info("Loaded cog: %s", ext)
             except Exception as exc:
+                self.failed_cogs[ext] = str(exc)
                 log.error("Failed to load cog %s: %s", ext, exc)
 
-        # Sync application commands globally
-        synced = await self.tree.sync()
-        log.info("Synced %d slash commands globally.", len(synced))
+        log.info("Loaded %d extensions. Use /sync to sync slash commands.", len(self.extensions))
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (ID: %s)", self.user, self.user.id)  # type: ignore[union-attr]
