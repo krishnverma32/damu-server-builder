@@ -98,6 +98,17 @@ class Database:
             )
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_stats (
+                guild_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, date)
+            )
+            """
+        )
         await conn.commit()
 
     async def get(self, namespace: str, key: str, default: Any = None) -> Any:
