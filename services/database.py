@@ -88,6 +88,16 @@ class Database:
             )
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS persistent_views (
+                view_id TEXT PRIMARY KEY,
+                view_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         await conn.commit()
 
     async def get(self, namespace: str, key: str, default: Any = None) -> Any:

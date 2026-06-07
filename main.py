@@ -13,6 +13,7 @@ from flask import Flask
 
 import config
 from services.database import get_database
+from services.view_registry import ViewRegistry
 from utils.logger import setup_logging
 
 # ── Keep-alive server for Render free tier ────────────────────────────────
@@ -70,6 +71,7 @@ class ServerBot(commands.Bot):
         self.start_time: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
         self.failed_cogs: dict[str, str] = {}
         self.db = get_database()
+        self.view_registry = ViewRegistry()
 
     async def setup_hook(self) -> None:
         """Load all cogs dynamically from the cogs/ directory."""
@@ -92,8 +94,11 @@ class ServerBot(commands.Bot):
         log.info("Loaded %d extensions. Use /sync to sync slash commands.", len(self.extensions))
 
     async def on_ready(self) -> None:
+        restored = await self.view_registry.restore_all(self)
         log.info("Logged in as %s (ID: %s)", self.user, self.user.id)  # type: ignore[union-attr]
         log.info("Guilds: %d | Latency: %.0fms", len(self.guilds), self.latency * 1000)
+        if restored:
+            log.info("Restored %d persistent view handlers.", restored)
 
 
 bot = ServerBot()

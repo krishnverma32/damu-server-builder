@@ -223,6 +223,10 @@ class CloseTicketModal(discord.ui.Modal, title="Close Ticket"):
         config_data["open_tickets"] = open_tickets
         config_data["claimed_tickets"] = claimed_tickets
         await self.cog.config_manager.save_guild(interaction.guild.id, config_data)
+        if hasattr(self.cog.bot, "view_registry"):
+            await self.cog.bot.view_registry.unregister(  # type: ignore[attr-defined]
+                f"ticket_control:{interaction.guild.id}:{channel.id}"
+            )
 
         # Step 6 \u2014 Schedule auto-delete
         delay = config_data.get("auto_delete_delay", AUTO_DELETE_DELAY)
@@ -532,8 +536,16 @@ class TicketSystem(commands.Cog):
 
     async def cog_load(self) -> None:
         # Register persistent views so buttons survive bot restarts
-        self.bot.add_view(TicketPanelView())
-        self.bot.add_view(TicketControlView())
+        if hasattr(self.bot, "view_registry"):
+            await self.bot.view_registry.add_runtime_view(  # type: ignore[attr-defined]
+                self.bot, "ticket_panel:runtime", TicketPanelView(), "ticket_panel"
+            )
+            await self.bot.view_registry.add_runtime_view(  # type: ignore[attr-defined]
+                self.bot, "ticket_control:runtime", TicketControlView(), "ticket_control"
+            )
+        else:
+            self.bot.add_view(TicketPanelView())
+            self.bot.add_view(TicketControlView())
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -611,6 +623,7 @@ class TicketSystem(commands.Cog):
 
         # Load existing config or create new one
         config_data = await self.config_manager.get_guild(interaction.guild.id)
+        old_panel_message_id = config_data.get("panel_message_id")
 
         # Build the panel embed
         panel_embed = discord.Embed(
@@ -628,7 +641,26 @@ class TicketSystem(commands.Cog):
         panel_msg = await interaction.channel.send(embed=panel_embed, view=panel_view)  # type: ignore[union-attr]
 
         # Register the view for persistence
-        self.bot.add_view(panel_view)
+        if hasattr(self.bot, "view_registry"):
+            if old_panel_message_id:
+                await self.bot.view_registry.unregister(  # type: ignore[attr-defined]
+                    f"ticket_panel:{interaction.guild.id}:{old_panel_message_id}"
+                )
+            await self.bot.view_registry.add_runtime_view(  # type: ignore[attr-defined]
+                self.bot, "ticket_panel:runtime", panel_view, "ticket_panel"
+            )
+            await self.bot.view_registry.register(  # type: ignore[attr-defined]
+                f"ticket_panel:{interaction.guild.id}:{panel_msg.id}",
+                panel_view,
+                {
+                    "guild_id": interaction.guild.id,
+                    "channel_id": interaction.channel.id,  # type: ignore[union-attr]
+                    "message_id": panel_msg.id,
+                },
+                "ticket_panel",
+            )
+        else:
+            self.bot.add_view(panel_view)
 
         # Save config
         config_data.update(
@@ -808,6 +840,22 @@ class TicketSystem(commands.Cog):
             embed=ticket_embed,
             view=control_view,
         )
+        if hasattr(self.bot, "view_registry"):
+            await self.bot.view_registry.add_runtime_view(  # type: ignore[attr-defined]
+                self.bot, "ticket_control:runtime", control_view, "ticket_control"
+            )
+            await self.bot.view_registry.register(  # type: ignore[attr-defined]
+                f"ticket_control:{interaction.guild.id}:{ticket_channel.id}",
+                control_view,
+                {
+                    "guild_id": interaction.guild.id,
+                    "channel_id": ticket_channel.id,
+                    "message_id": control_msg.id,
+                    "ticket_id": ticket_id,
+                    "user_id": interaction.user.id,
+                },
+                "ticket_control",
+            )
 
         # Save control message ID for later editing (claim)
         control_messages: dict = config_data.get("control_messages", {})
