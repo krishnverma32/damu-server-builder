@@ -16,6 +16,7 @@ import aiofiles
 import discord
 from discord import app_commands
 from discord.ext import commands
+from motor.motor_asyncio import AsyncIOMotorClient
 
 import config
 from services.embed_service import error_embed, info_embed, success_embed, warning_embed
@@ -26,10 +27,12 @@ LINK_RE = re.compile(
     r"(?i)\b(?:https?://|www\.|discord\.gg/|discord\.com/invite/)[^\s<>()]+"
 )
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff")
-IMAGE_WINDOW_SECONDS = 1.0
+IMAGE_WINDOW_SECONDS = 10.0
 MAX_IMAGES_PER_WINDOW = 3
 REPEAT_TIMEOUT_MINUTES = 10
 OFFENSE_RESET_HOURS = 24
+MONGO_DB_NAME = "server_builder_bot"
+MONGO_COLLECTION_NAME = "automod_state"
 
 
 class AutoModCog(commands.Cog, name="AutoMod"):
@@ -37,15 +40,38 @@ class AutoModCog(commands.Cog, name="AutoMod"):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self._image_windows: dict[tuple[int, int], deque[tuple[float, int]]] = defaultdict(deque)
+        self._image_windows: dict[tuple[int, int], deque[tuple[float, int, int, int]]] = defaultdict(deque)
         self._offenses: dict[str, Any] = {}
         self._settings: dict[str, Any] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
+        self._mongo_client: AsyncIOMotorClient | None = None
+        self._mongo_available = bool(config.MONGO_URI)
+
+    def _mongo_collection(self):
+        if not self._mongo_available:
+            return None
+        if self._mongo_client is None:
+            self._mongo_client = AsyncIOMotorClient(config.MONGO_URI, serverSelectionTimeoutMS=3000)
+        db = self._mongo_client.get_default_database(default=MONGO_DB_NAME)
+        return db[MONGO_COLLECTION_NAME]
 
     async def _load(self) -> None:
         if self._loaded:
             return
+        collection = self._mongo_collection()
+        if collection is not None:
+            try:
+                doc = await collection.find_one({"_id": "global"})
+                if doc:
+                    self._offenses = doc.get("offenses", {})
+                    self._settings = doc.get("settings", {})
+                    self._loaded = True
+                    return
+            except Exception as exc:
+                log.warning("Mongo AutoMod load failed, using JSON fallback: %s", exc)
+                self._mongo_available = False
+
         if os.path.exists(config.AUTOMOD_FILE):
             try:
                 async with aiofiles.open(config.AUTOMOD_FILE, "r", encoding="utf-8") as f:
@@ -63,6 +89,19 @@ class AutoModCog(commands.Cog, name="AutoMod"):
         self._loaded = True
 
     async def _save(self) -> None:
+        collection = self._mongo_collection()
+        if collection is not None:
+            try:
+                await collection.update_one(
+                    {"_id": "global"},
+                    {"$set": {"offenses": self._offenses, "settings": self._settings}},
+                    upsert=True,
+                )
+                return
+            except Exception as exc:
+                log.warning("Mongo AutoMod save failed, using JSON fallback: %s", exc)
+                self._mongo_available = False
+
         os.makedirs(os.path.dirname(config.AUTOMOD_FILE), exist_ok=True)
         async with aiofiles.open(config.AUTOMOD_FILE, "w", encoding="utf-8") as f:
             await f.write(json.dumps({"offenses": self._offenses, "settings": self._settings}, indent=2))
@@ -98,15 +137,25 @@ class AutoModCog(commands.Cog, name="AutoMod"):
         bypass_ids = set(settings.get("bypass_role_ids", []))
         return any(role.id in bypass_ids for role in member.roles)
 
-    def _count_recent_images(self, guild_id: int, user_id: int, image_count: int) -> int:
+    def _track_recent_images(
+        self,
+        guild_id: int,
+        user_id: int,
+        channel_id: int,
+        message_id: int,
+        image_count: int,
+    ) -> tuple[int, list[tuple[int, int]]]:
         now = time.monotonic()
         window = self._image_windows[(guild_id, user_id)]
-        cutoff = now - IMAGE_WINDOW_SECONDS
-        while window and window[0][0] < cutoff:
-            window.popleft()
+        if window and now - window[-1][0] > IMAGE_WINDOW_SECONDS:
+            window.clear()
         if image_count:
-            window.append((now, image_count))
-        return sum(count for _, count in window)
+            window.append((now, channel_id, message_id, image_count))
+        while len(window) > 25:
+            window.popleft()
+        total = sum(count for _, _, _, count in window)
+        refs = [(tracked_channel_id, tracked_message_id) for _, tracked_channel_id, tracked_message_id, _ in window]
+        return total, refs
 
     async def _record_offense(self, guild_id: int, user_id: int, reason: str) -> int:
         await self._load()
@@ -179,25 +228,61 @@ class AutoModCog(commands.Cog, name="AutoMod"):
         except discord.HTTPException:
             pass
 
-    async def _handle_violation(self, message: discord.Message, reason: str) -> None:
+    async def _delete_message_refs(
+        self,
+        refs: list[tuple[int, int]],
+        current_message: discord.Message,
+    ) -> None:
+        seen: set[tuple[int, int]] = set()
+        for channel_id, message_id in refs:
+            key = (channel_id, message_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            if message_id == current_message.id:
+                try:
+                    await current_message.delete()
+                except discord.HTTPException:
+                    pass
+                continue
+            channel = current_message.guild.get_channel(channel_id) if current_message.guild else None
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            try:
+                target = await channel.fetch_message(message_id)
+                await target.delete()
+            except discord.HTTPException:
+                pass
+
+    async def _handle_violation(
+        self,
+        message: discord.Message,
+        reason: str,
+        *,
+        direct_timeout: bool = False,
+        delete_refs: list[tuple[int, int]] | None = None,
+    ) -> None:
         if not message.guild or not isinstance(message.author, discord.Member):
             return
 
         member = message.author
-        try:
-            await message.delete()
-        except discord.HTTPException:
-            pass
+        if delete_refs:
+            await self._delete_message_refs(delete_refs, message)
+        else:
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
 
         count = await self._record_offense(message.guild.id, member.id, reason)
         await self._dm_user_warning(member, reason, count)
 
         timed_out = False
-        if count >= 2:
+        if direct_timeout or count >= 2:
             try:
                 await member.timeout(
                     datetime.timedelta(minutes=REPEAT_TIMEOUT_MINUTES),
-                    reason=f"AutoMod repeat offense: {reason}",
+                    reason=f"AutoMod {'direct timeout' if direct_timeout else 'repeat offense'}: {reason}",
                 )
                 timed_out = True
                 await self._notify_owners(member, reason, count)
@@ -226,12 +311,21 @@ class AutoModCog(commands.Cog, name="AutoMod"):
 
         image_count = sum(1 for attachment in message.attachments if self._is_image_attachment(attachment))
         if image_count:
-            total_images = self._count_recent_images(message.guild.id, message.author.id, image_count)
+            total_images, image_refs = self._track_recent_images(
+                message.guild.id,
+                message.author.id,
+                message.channel.id,
+                message.id,
+                image_count,
+            )
             if total_images > MAX_IMAGES_PER_WINDOW:
                 await self._handle_violation(
                     message,
-                    f"Image spam: more than {MAX_IMAGES_PER_WINDOW} images in {IMAGE_WINDOW_SECONDS:.0f}s",
+                    f"Image raid: more than {MAX_IMAGES_PER_WINDOW} images across server channels in {IMAGE_WINDOW_SECONDS:.0f}s",
+                    direct_timeout=True,
+                    delete_refs=image_refs,
                 )
+                self._image_windows.pop((message.guild.id, message.author.id), None)
 
     @app_commands.command(name="automod_status", description="Show AutoMod settings and recent offense count.")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -248,9 +342,12 @@ class AutoModCog(commands.Cog, name="AutoMod"):
             "AutoMod Status",
             (
                 "**Enabled:** yes\n"
-                "**Deletes:** links, image bursts over 3 images in 1 second\n"
-                "**First offense:** delete + warn\n"
-                "**Repeat offense:** 10 minute timeout + DM server owner and bot owner\n"
+                "**Deletes:** links, image raids over 3 images across server channels\n"
+                "**Links:** delete + warn first, timeout on repeat\n"
+                "**Image raids:** delete all tracked image messages + immediate 10 minute timeout\n"
+                f"**Slow drip catch:** images stay in one chain while each gap is under {IMAGE_WINDOW_SECONDS:.0f}s\n"
+                "**Timeout alerts:** DM server owner and bot owner\n"
+                f"**Storage:** {'MongoDB' if self._mongo_available else 'local JSON fallback'}\n"
                 f"**Tracked users in this server:** {total}\n"
                 f"**Ignored channels:** {len(ignored_channels)}\n"
                 f"**Bypass roles:** {len(bypass_roles)}"
