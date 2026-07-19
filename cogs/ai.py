@@ -13,6 +13,7 @@ import config
 from services import ai_service
 from services.database import get_database
 from services.embed_service import error_embed, info_embed, success_embed
+from services.report_service import record_counter
 from utils.helpers import chunk_text
 
 log = logging.getLogger("cogs.ai")
@@ -185,6 +186,7 @@ class AICog(commands.Cog, name="AI"):
         result = await ai_service.get_ai_response(
             prompt,
             interaction.user.id,
+            guild_id=interaction.guild_id,
             username=interaction.user.display_name,
             return_usage=True,
         )
@@ -193,6 +195,8 @@ class AICog(commands.Cog, name="AI"):
 
         if not owner:
             await self._add_usage(guild_id, interaction.user.id, tokens_used)
+            if guild_id is not None:
+                await record_counter(guild_id, "ai", "messages")
             if await self._global_tokens_today() >= config.AI_DAILY_TOKEN_LIMIT:
                 await self._notify_owner_global_limit()
 
@@ -204,7 +208,7 @@ class AICog(commands.Cog, name="AI"):
     @ai.command(name="reset", description="Clear your AI conversation memory.")
     @app_commands.checks.cooldown(rate=5, per=60.0)
     async def reset(self, interaction: discord.Interaction) -> None:
-        await ai_service.reset_user_memory(interaction.user.id)
+        await ai_service.reset_user_memory(interaction.user.id, interaction.guild_id)
         await interaction.response.send_message(
             embed=success_embed("Memory Cleared", "Your conversation history has been reset."),
             ephemeral=True,
@@ -224,7 +228,7 @@ class AICog(commands.Cog, name="AI"):
     )
     @app_commands.checks.cooldown(rate=5, per=60.0)
     async def persona(self, interaction: discord.Interaction, set: app_commands.Choice[str]) -> None:
-        await ai_service.set_user_persona(interaction.user.id, set.value)
+        await ai_service.set_user_persona(interaction.user.id, set.value, interaction.guild_id)
         await interaction.response.send_message(
             embed=success_embed("Persona Updated", f"AI persona set to **{set.name}**."),
             ephemeral=True,

@@ -21,7 +21,7 @@ SUPPORT_ROLE_ID: int = int(os.getenv("SUPPORT_ROLE_ID", "0"))
 DEV_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("DEV_IDS", "").split(",") if i.strip()
 ]
-SERVER_BUILD_OWNER_ID: int = int(os.getenv("SERVER_BUILD_OWNER_ID", "486555340670894080"))
+SERVER_BUILD_OWNER_ID: int = int(os.getenv("SERVER_BUILD_OWNER_ID", "0"))
 BOT_OWNER_ID: int = int(os.getenv("BOT_OWNER_ID", str(SERVER_BUILD_OWNER_ID)))
 SERVER_BUILD_BYPASS_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("SERVER_BUILD_BYPASS_IDS", "").split(",") if i.strip()

@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 import config
 from services.embed_service import error_embed, info_embed, success_embed, warning_embed
+from services.report_service import record_counter
 
 log = logging.getLogger("cogs.automod")
 
@@ -176,6 +177,7 @@ class AutoModCog(commands.Cog, name="AutoMod"):
             record["last_at"] = now.isoformat()
             self._offenses[key] = record
             await self._save()
+            await record_counter(guild_id, "automod", "offenses")
             return int(record["count"])
 
     async def _dm_user_warning(self, member: discord.Member, reason: str, count: int) -> None:

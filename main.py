@@ -49,6 +49,10 @@ for _d in _DATA_DIRS:
 setup_logging()
 log = logging.getLogger("bot")
 
+if config.SERVER_BUILD_OWNER_ID == 0:
+    log.error("SERVER_BUILD_OWNER_ID must be set in .env before startup.")
+    raise RuntimeError("SERVER_BUILD_OWNER_ID must be set in .env")
+
 # ── Intents ───────────────────────────────────────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
