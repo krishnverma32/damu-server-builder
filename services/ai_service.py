@@ -403,15 +403,17 @@ async def _ensure_loaded() -> None:
     _loaded = True
 
 
-async def _save_memory() -> None:
-    """Persist memory to SQLite."""
+async def _save_memory(key: str) -> None:
+    """Persist one memory entry to SQLite."""
     db = get_database()
-    for key, value in _memory.items():
-        await db.set("ai_memory", key, value)
+    await db.set("ai_memory", key, _memory[key])
 
 
-def _user_key(user_id: int) -> str:
-    return str(user_id)
+def _user_key(user_id: int, guild_id: int | None = None) -> str:
+    """Return a memory key scoped to a guild or the DM namespace."""
+    if guild_id is None:
+        return f"dm:{user_id}"
+    return f"{guild_id}:{user_id}"
 
 
 def _detect_message_type(prompt: str) -> str:
@@ -562,16 +564,17 @@ def _validate_rukiya_response(
 async def get_ai_response(
     prompt: str,
     user_id: int,
+    guild_id: int | None = None,
     persona: str = "default",
     username: str | None = None,
     return_usage: bool = False,
 ) -> str | tuple[str, int]:
     """Send *prompt* to OpenRouter and return the assistant reply.
 
-    Maintains per-user conversation history (max ``config.AI_MAX_HISTORY`` exchanges).
+    Maintains per-guild per-user conversation history (max ``config.AI_MAX_HISTORY`` exchanges).
     """
     await _ensure_loaded()
-    key = _user_key(user_id)
+    key = _user_key(user_id, guild_id)
 
     # Initialise user entry if missing
     if key not in _memory:
@@ -677,25 +680,25 @@ async def get_ai_response(
     if len(user_data["history"]) > config.AI_MAX_HISTORY * 2:
         user_data["history"] = user_data["history"][-(config.AI_MAX_HISTORY * 2) :]
 
-    await _save_memory()
+    await _save_memory(key)
     return (reply, tokens_used) if return_usage else reply
 
 
-async def reset_user_memory(user_id: int) -> None:
+async def reset_user_memory(user_id: int, guild_id: int | None = None) -> None:
     """Clear conversation history for a user."""
     await _ensure_loaded()
-    key = _user_key(user_id)
+    key = _user_key(user_id, guild_id)
     if key in _memory:
         _memory[key]["history"] = []
-        await _save_memory()
+        await _save_memory(key)
 
 
-async def set_user_persona(user_id: int, persona: str) -> None:
+async def set_user_persona(user_id: int, persona: str, guild_id: int | None = None) -> None:
     """Switch the active persona for a user."""
     await _ensure_loaded()
-    key = _user_key(user_id)
+    key = _user_key(user_id, guild_id)
     if key not in _memory:
         _memory[key] = {"persona": persona, "history": []}
     else:
         _memory[key]["persona"] = persona
-    await _save_memory()
+    await _save_memory(key)

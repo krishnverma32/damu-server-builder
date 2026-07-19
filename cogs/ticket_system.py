@@ -17,6 +17,8 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from services.report_service import record_counter
+
 load_dotenv()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -223,6 +225,7 @@ class CloseTicketModal(discord.ui.Modal, title="Close Ticket"):
         config_data["open_tickets"] = open_tickets
         config_data["claimed_tickets"] = claimed_tickets
         await self.cog.config_manager.save_guild(interaction.guild.id, config_data)
+        await record_counter(interaction.guild.id, "tickets", "closed")
         if hasattr(self.cog.bot, "view_registry"):
             await self.cog.bot.view_registry.unregister(  # type: ignore[attr-defined]
                 f"ticket_control:{interaction.guild.id}:{channel.id}"
@@ -867,6 +870,7 @@ class TicketSystem(commands.Cog):
         config_data["open_tickets"] = open_tickets
         config_data["ticket_counter"] = counter
         await self.config_manager.save_guild(interaction.guild.id, config_data)
+        await record_counter(interaction.guild.id, "tickets", "opened")
 
         self.ticket_cooldowns[interaction.user.id] = datetime.now(timezone.utc)
 

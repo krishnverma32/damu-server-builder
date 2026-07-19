@@ -2632,7 +2632,9 @@ class ServerBuilderCog(commands.Cog, name="Server Builder"):
 
         # Ask AI for a server schema
         raw = await ai_service.get_ai_response(
-            _GENERATION_PROMPT.format(theme=theme), interaction.user.id
+            _GENERATION_PROMPT.format(theme=theme),
+            interaction.user.id,
+            guild_id=interaction.guild_id,
         )
 
         if raw.startswith("\u26a0\ufe0f"):
