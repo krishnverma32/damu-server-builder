@@ -6,22 +6,11 @@ import discord
 from builder.names import _parse_colour, _style_text, _styled_name
 from builder.permissions import _resolve_permissions
 from builder.progress import BuildProgress, _update_progress
+from builder.models import BuildPlan, ServerConfig
+from builder.planner import plan_build, resolve_role
+from builder.rollback import rollback_created
 
 log = logging.getLogger(__name__)
-
-def _role_aliases(role_name: str) -> set[str]:
-    lowered = role_name.lower()
-    aliases = {role_name}
-    if any(word in lowered for word in ("owner", "admin", "administrator")):
-        aliases.update({"Owner", "Admin", "Administrator"})
-    if any(word in lowered for word in ("mod", "moderator")):
-        aliases.update({"Mod", "Moderator"})
-    return aliases
-
-
-def _find_existing_role(guild: discord.Guild, name: str) -> discord.Role | None:
-    return discord.utils.get(guild.roles, name=name)
-
 
 def _forum_sort_order(value: str | None) -> discord.ForumOrderType | None:
     if not value:
@@ -73,6 +62,11 @@ async def build_server(
     and *role_map* maps role-name \u2192 created :class:`discord.Role`.
     Raises on fatal errors after rolling-back partially created objects.
     """
+    config = ServerConfig.from_dict(schema)
+    plan = plan_build(guild, config, selected_roles=selected_roles,
+                      skip_existing_roles=skip_existing_roles)
+    plan.require_valid()
+    schema = config.to_dict()
     created_roles: list[discord.Role] = []
     created_channels: list[discord.abc.GuildChannel] = []
     logs: list[str] = []
@@ -99,29 +93,18 @@ async def build_server(
         role_map: dict[str, discord.Role] = {}
         for alias, role in (selected_roles or {}).items():
             role_map[alias] = role
-            for extra_alias in _role_aliases(alias):
-                role_map.setdefault(extra_alias, role)
 
         for role_data in schema.get("roles", []):
             role_name = role_data["name"]
             styled_role_name = _styled_name(role_data, role_font)
-            role_permissions = [perm.lower() for perm in role_data.get("permissions", [])]
 
-            existing_role = role_map.get(role_name)
-            if not existing_role and selected_roles:
-                if "administrator" in role_permissions:
-                    existing_role = selected_roles.get("Admin") or selected_roles.get("Administrator")
-                elif any(word in role_name.lower() for word in ("mod", "moderator")):
-                    existing_role = selected_roles.get("Mod") or selected_roles.get("Moderator")
-
-            if not existing_role and skip_existing_roles:
-                existing_role = _find_existing_role(guild, role_name) or _find_existing_role(guild, styled_role_name)
+            existing_role = resolve_role(
+                guild, role_data, role_font, selected_roles or {}, skip_existing_roles
+            )
 
             if existing_role:
                 role_map[role_name] = existing_role
                 role_map[styled_role_name] = existing_role
-                for alias in _role_aliases(role_name):
-                    role_map.setdefault(alias, existing_role)
                 logs.append(f"Skipped existing role: **{existing_role.name}**")
                 progress.advance()
                 if progress_msg:
@@ -140,8 +123,6 @@ async def build_server(
             created_roles.append(role)
             role_map[role_name] = role
             role_map[styled_role_name] = role
-            for alias in _role_aliases(role_name):
-                role_map.setdefault(alias, role)
             logs.append(f"Created role: **{role.name}**")
             progress.advance()
             if progress_msg:
@@ -193,7 +174,7 @@ async def build_server(
                         "bitrate": bitrate,
                         "user_limit": ch_data.get("user_limit", 0),
                     }
-                    if ch_overwrites:
+                    if "permission_overwrites" in ch_data:
                         kwargs["overwrites"] = ch_overwrites
                     vc = await guild.create_voice_channel(**kwargs)
                     created_channels.append(vc)
@@ -220,7 +201,7 @@ async def build_server(
                         kwargs["default_layout"] = layout
                     if ch_data.get("default_reaction_emoji"):
                         kwargs["default_reaction_emoji"] = ch_data["default_reaction_emoji"]
-                    if ch_overwrites:
+                    if "permission_overwrites" in ch_data:
                         kwargs["overwrites"] = ch_overwrites
                     forum = await guild.create_forum(**kwargs)
                     created_channels.append(forum)
@@ -234,7 +215,7 @@ async def build_server(
                         "slowmode_delay": ch_data.get("slowmode", 0),
                         "nsfw": ch_data.get("nsfw", False),
                     }
-                    if ch_overwrites:
+                    if "permission_overwrites" in ch_data:
                         kwargs["overwrites"] = ch_overwrites
                     tc = await guild.create_text_channel(**kwargs)
                     created_channels.append(tc)
@@ -255,19 +236,25 @@ async def build_server(
 
     except Exception as exc:
         log.error("Build failed, rolling back: %s", exc)
-        # Rollback
-        for ch in reversed(created_channels):
-            try:
-                await ch.delete(reason="Server build rollback")
-            except Exception:
-                pass
-        for role in reversed(created_roles):
-            try:
-                await role.delete(reason="Server build rollback")
-            except Exception:
-                pass
+        failed = await rollback_created(created_channels, created_roles)
+        if failed:
+            log.error("Build rollback incomplete; manual cleanup required for IDs: %s", failed)
         raise
 
     return logs, role_map
 
 
+
+async def clean_resources(guild: discord.Guild, plan: BuildPlan) -> None:
+    """Delete only the inventory explicitly reviewed by the administrator.
+
+    Cleanup is irreversible. Stop on the first failure rather than silently
+    continuing with a partially cleaned guild.
+    """
+    for step in plan.steps:
+        if step.action != "delete" or step.resource_id is None:
+            continue
+        resource = (guild.get_role(step.resource_id) if step.resource == "role"
+                    else guild.get_channel(step.resource_id))
+        if resource is not None:
+            await resource.delete(reason="Damu: explicitly confirmed destructive build")

@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import discord
 from jsonschema import Draft202012Validator
 
 from builder.exceptions import ConfigurationError
@@ -143,6 +144,6 @@ def _check_overwrites(data: dict[str, Any], path: str, roles: set[str], issues: 
         deny = _resolve_permissions(overwrite.get("deny", []))
         if allow.value & deny.value:
             issues.append(f"{location}: the same permission cannot be allowed and denied (including aliases).")
-        channel_flags = __import__("discord").Permissions.all_channel().value
+        channel_flags = discord.Permissions.all_channel().value
         if (allow.value | deny.value) & ~channel_flags:
             issues.append(f"{location}: only channel permissions can be used in overwrites.")
