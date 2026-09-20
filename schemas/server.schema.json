@@ -1,0 +1,786 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://damu.local/schemas/server.schema.json",
+  "title": "Damu ServerConfig 2.0",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "template_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "server_name": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "pattern": "\\S"
+        }
+      ]
+    },
+    "font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "name_font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "name_style": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "server_font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "category_font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "channel_font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "role_font": {
+      "type": "string",
+      "enum": [
+        "bold",
+        "italic",
+        "bold_italic",
+        "script",
+        "bold_script",
+        "fraktur",
+        "double_struck",
+        "monospace",
+        "small_caps"
+      ]
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/role"
+      },
+      "maxItems": 250
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/category"
+      },
+      "maxItems": 50
+    },
+    "auto_assign": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "\\S"
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "embed_title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "embed_description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "button_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "account_age_check": {
+          "type": "boolean"
+        },
+        "min_account_age_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "required": [],
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "roles"
+      ]
+    },
+    {
+      "required": [
+        "categories"
+      ]
+    }
+  ],
+  "$defs": {
+    "role": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "\\S"
+        },
+        "font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_style": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "enum": [
+                "red",
+                "dark_red",
+                "crimson",
+                "orange",
+                "dark_orange",
+                "yellow",
+                "gold",
+                "amber",
+                "green",
+                "dark_green",
+                "lime",
+                "emerald",
+                "teal",
+                "dark_teal",
+                "cyan",
+                "aqua",
+                "blue",
+                "dark_blue",
+                "navy",
+                "royal_blue",
+                "purple",
+                "dark_purple",
+                "violet",
+                "indigo",
+                "magenta",
+                "pink",
+                "hot_pink",
+                "fuchsia",
+                "white",
+                "light_grey",
+                "grey",
+                "dark_grey",
+                "black",
+                "blurple",
+                "greyple"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^#?[0-9a-fA-F]{6}$"
+            }
+          ]
+        },
+        "hoist": {
+          "type": "boolean"
+        },
+        "mentionable": {
+          "type": "boolean"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "add_reactions",
+              "administrator",
+              "attach_files",
+              "ban_members",
+              "connect",
+              "create_private_threads",
+              "create_public_threads",
+              "deafen_members",
+              "embed_links",
+              "kick_members",
+              "manage_channels",
+              "manage_guild",
+              "manage_messages",
+              "manage_nicknames",
+              "manage_roles",
+              "manage_threads",
+              "manage_webhooks",
+              "mention_everyone",
+              "move_members",
+              "mute_members",
+              "read_message_history",
+              "read_messages",
+              "send_messages",
+              "send_messages_in_threads",
+              "speak",
+              "use_application_commands",
+              "use_external_emojis",
+              "use_external_stickers",
+              "view_audit_log",
+              "view_channel"
+            ]
+          },
+          "maxItems": 30,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "channel": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "\\S"
+        },
+        "font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_style": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "type": {
+          "enum": [
+            "text",
+            "voice",
+            "forum"
+          ]
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "slowmode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 21600
+        },
+        "nsfw": {
+          "type": "boolean"
+        },
+        "permission_overwrites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "\\S"
+              },
+              "allow": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "add_reactions",
+                    "administrator",
+                    "attach_files",
+                    "ban_members",
+                    "connect",
+                    "create_private_threads",
+                    "create_public_threads",
+                    "deafen_members",
+                    "embed_links",
+                    "kick_members",
+                    "manage_channels",
+                    "manage_guild",
+                    "manage_messages",
+                    "manage_nicknames",
+                    "manage_roles",
+                    "manage_threads",
+                    "manage_webhooks",
+                    "mention_everyone",
+                    "move_members",
+                    "mute_members",
+                    "read_message_history",
+                    "read_messages",
+                    "send_messages",
+                    "send_messages_in_threads",
+                    "speak",
+                    "use_application_commands",
+                    "use_external_emojis",
+                    "use_external_stickers",
+                    "view_audit_log",
+                    "view_channel"
+                  ]
+                },
+                "maxItems": 30,
+                "uniqueItems": true
+              },
+              "deny": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "add_reactions",
+                    "administrator",
+                    "attach_files",
+                    "ban_members",
+                    "connect",
+                    "create_private_threads",
+                    "create_public_threads",
+                    "deafen_members",
+                    "embed_links",
+                    "kick_members",
+                    "manage_channels",
+                    "manage_guild",
+                    "manage_messages",
+                    "manage_nicknames",
+                    "manage_roles",
+                    "manage_threads",
+                    "manage_webhooks",
+                    "mention_everyone",
+                    "move_members",
+                    "mute_members",
+                    "read_message_history",
+                    "read_messages",
+                    "send_messages",
+                    "send_messages_in_threads",
+                    "speak",
+                    "use_application_commands",
+                    "use_external_emojis",
+                    "use_external_stickers",
+                    "view_audit_log",
+                    "view_channel"
+                  ]
+                },
+                "maxItems": 30,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        },
+        "bitrate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 384000
+        },
+        "user_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        },
+        "thread_slowmode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 21600
+        },
+        "auto_archive": {
+          "enum": [
+            60,
+            1440,
+            4320,
+            10080
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20,
+                "pattern": "\\S"
+              },
+              "emoji": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "moderated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 20
+        },
+        "default_sort_order": {
+          "enum": [
+            "latest_activity",
+            "creation_date"
+          ]
+        },
+        "default_layout": {
+          "enum": [
+            "not_set",
+            "list",
+            "list_view",
+            "gallery",
+            "gallery_view"
+          ]
+        },
+        "default_reaction_emoji": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "\\S"
+              },
+              "auto_archive": {
+                "enum": [
+                  60,
+                  1440,
+                  4320,
+                  10080
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "category": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "\\S"
+        },
+        "font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_font": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "name_style": {
+          "type": "string",
+          "enum": [
+            "bold",
+            "italic",
+            "bold_italic",
+            "script",
+            "bold_script",
+            "fraktur",
+            "double_struck",
+            "monospace",
+            "small_caps"
+          ]
+        },
+        "permission_overwrites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "\\S"
+              },
+              "allow": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "add_reactions",
+                    "administrator",
+                    "attach_files",
+                    "ban_members",
+                    "connect",
+                    "create_private_threads",
+                    "create_public_threads",
+                    "deafen_members",
+                    "embed_links",
+                    "kick_members",
+                    "manage_channels",
+                    "manage_guild",
+                    "manage_messages",
+                    "manage_nicknames",
+                    "manage_roles",
+                    "manage_threads",
+                    "manage_webhooks",
+                    "mention_everyone",
+                    "move_members",
+                    "mute_members",
+                    "read_message_history",
+                    "read_messages",
+                    "send_messages",
+                    "send_messages_in_threads",
+                    "speak",
+                    "use_application_commands",
+                    "use_external_emojis",
+                    "use_external_stickers",
+                    "view_audit_log",
+                    "view_channel"
+                  ]
+                },
+                "maxItems": 30,
+                "uniqueItems": true
+              },
+              "deny": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "add_reactions",
+                    "administrator",
+                    "attach_files",
+                    "ban_members",
+                    "connect",
+                    "create_private_threads",
+                    "create_public_threads",
+                    "deafen_members",
+                    "embed_links",
+                    "kick_members",
+                    "manage_channels",
+                    "manage_guild",
+                    "manage_messages",
+                    "manage_nicknames",
+                    "manage_roles",
+                    "manage_threads",
+                    "manage_webhooks",
+                    "mention_everyone",
+                    "move_members",
+                    "mute_members",
+                    "read_message_history",
+                    "read_messages",
+                    "send_messages",
+                    "send_messages_in_threads",
+                    "speak",
+                    "use_application_commands",
+                    "use_external_emojis",
+                    "use_external_stickers",
+                    "view_audit_log",
+                    "view_channel"
+                  ]
+                },
+                "maxItems": 30,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/channel"
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

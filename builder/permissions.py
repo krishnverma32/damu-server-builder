@@ -46,7 +46,7 @@ def _resolve_permissions(perm_names: list[str]) -> discord.Permissions:
         if flag:
             value |= flag
         else:
-            log.warning("Unknown permission name: %s", name)
+            raise ValueError(f"Unknown permission name: {name}")
     return discord.Permissions(value)
 
 
