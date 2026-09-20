@@ -38,5 +38,8 @@ jobs:
           ruff check builder services tests --ignore E501,F401,F841 || true
 
       - name: Run test suite (pytest)
+        env:
+          PYTHONPATH: .
         run: |
-          pytest -v
+          python -m pytest -v
+
