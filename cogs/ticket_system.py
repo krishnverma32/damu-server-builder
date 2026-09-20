@@ -12,14 +12,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import discord
-import motor.motor_asyncio
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from services.repositories import TicketRepository
 from services.report_service import record_counter
-
-load_dotenv()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 EMBED_COLOR: int = 0x5865F2
@@ -29,45 +27,8 @@ AUTO_DELETE_DELAY: int = 10  # seconds before ticket channel is deleted after cl
 log = logging.getLogger("cogs.ticket_system")
 
 
-# ── Config Manager (MongoDB via motor) ────────────────────────────────────────
-class ConfigManager:
-    """Handles all config persistence for the ticket system using MongoDB Atlas."""
-
-    def __init__(self) -> None:
-        import config as _config
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(_config.MONGO_URI)
-        self.db = self.client["ticket_bot"]
-        self.col = self.db["guild_configs"]
-
-    async def get_guild(self, guild_id: int) -> dict:
-        doc = await self.col.find_one({"_id": str(guild_id)})
-        return doc or {}
-
-    async def save_guild(self, guild_id: int, data: dict) -> None:
-        data.pop("_id", None)  # avoid overwriting the document key
-        await self.col.update_one(
-            {"_id": str(guild_id)},
-            {"$set": data},
-            upsert=True,
-        )
-
-    async def get_key(self, guild_id: int, key: str, default=None):
-        doc = await self.get_guild(guild_id)
-        return doc.get(key, default)
-
-    async def set_key(self, guild_id: int, key: str, value) -> None:
-        await self.col.update_one(
-            {"_id": str(guild_id)},
-            {"$set": {key: value}},
-            upsert=True,
-        )
-
-    async def delete_key(self, guild_id: int, key: str) -> None:
-        await self.col.update_one(
-            {"_id": str(guild_id)},
-            {"$unset": {key: ""}},
-            upsert=False,
-        )
+# ── Config Manager (SQLite-backed via TicketRepository) ───────────────────────
+ConfigManager = TicketRepository
 
 
 # ── Auto-Delete Manager ──────────────────────────────────────────────────────

@@ -49,17 +49,42 @@ def _forum_tags(tags: list[dict[str, Any]]) -> list[discord.ForumTag]:
     return forum_tags
 
 
+def _resolve_target(
+    guild: discord.Guild,
+    role_map: dict[str, discord.Role],
+    ow: dict[str, Any],
+) -> discord.Role | discord.Member | None:
+    """Resolve an overwrite target to a discord.Role or discord.Member."""
+    if "role" in ow:
+        role_name = str(ow.get("role", ""))
+        if role_name.lower() == "@everyone":
+            return guild.default_role
+        if role_name in role_map:
+            return role_map[role_name]
+        return discord.utils.get(guild.roles, name=role_name)
+    if "member" in ow:
+        member_ref = str(ow.get("member", "")).strip()
+        if member_ref.isdigit():
+            member = guild.get_member(int(member_ref))
+            if member:
+                return member
+        return discord.utils.get(guild.members, name=member_ref)
+    return None
+
+
 async def build_server(
     guild: discord.Guild,
     schema: dict[str, Any],
     progress_msg: discord.Message | None = None,
     selected_roles: dict[str, discord.Role] | None = None,
     skip_existing_roles: bool = True,
+    build_id: int | None = None,
+    build_repo: Any | None = None,
 ) -> tuple[list[str], dict[str, discord.Role]]:
     """Build roles, categories, and channels in *guild* from *schema*.
 
     Returns ``(logs, role_map)`` where *logs* is a list of description lines
-    and *role_map* maps role-name \u2192 created :class:`discord.Role`.
+    and *role_map* maps role-name → created :class:`discord.Role`.
     Raises on fatal errors after rolling-back partially created objects.
     """
     config = ServerConfig.from_dict(schema)
@@ -133,14 +158,11 @@ async def build_server(
             # Build permission overwrites for category
             overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {}
             for ow in cat_data.get("permission_overwrites", []):
-                role_name = ow.get("role", "")
-                target_role = role_map.get(role_name)
-                if not target_role and role_name.lower() == "@everyone":
-                    target_role = guild.default_role
-                if target_role:
+                target = _resolve_target(guild, role_map, ow)
+                if target:
                     allow = _resolve_permissions(ow.get("allow", []))
                     deny = _resolve_permissions(ow.get("deny", []))
-                    overwrites[target_role] = discord.PermissionOverwrite.from_pair(allow, deny)
+                    overwrites[target] = discord.PermissionOverwrite.from_pair(allow, deny)
 
             category_name = _styled_name(cat_data, category_font)
             category = await guild.create_category(name=category_name, overwrites=overwrites)
@@ -154,9 +176,7 @@ async def build_server(
                 # ── Per-channel permission overwrites ────────────────────────
                 ch_overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {}
                 for ow in ch_data.get("permission_overwrites", []):
-                    target = role_map.get(ow.get("role", ""))
-                    if not target and ow.get("role", "").lower() == "@everyone":
-                        target = guild.default_role
+                    target = _resolve_target(guild, role_map, ow)
                     if target:
                         allow = _resolve_permissions(ow.get("allow", []))
                         deny = _resolve_permissions(ow.get("deny", []))
@@ -178,8 +198,42 @@ async def build_server(
                         kwargs["overwrites"] = ch_overwrites
                     vc = await guild.create_voice_channel(**kwargs)
                     created_channels.append(vc)
-                    perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    perm_note = f" (perms: {', '.join(str(o.get('role') or o.get('member')) for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
                     logs.append(f"Created voice channel: **{channel_name}**{perm_note}")
+                elif ch_type == "stage":
+                    max_bitrate = guild.bitrate_limit
+                    bitrate = min(ch_data.get("bitrate", 64000), max_bitrate)
+                    kwargs = {
+                        "name": channel_name,
+                        "category": category,
+                        "topic": ch_data.get("topic", ""),
+                        "bitrate": bitrate,
+                        "user_limit": ch_data.get("user_limit", 0),
+                    }
+                    if "permission_overwrites" in ch_data:
+                        kwargs["overwrites"] = ch_overwrites
+                    sc = await guild.create_stage_channel(**kwargs)
+                    created_channels.append(sc)
+                    perm_note = f" (perms: {', '.join(str(o.get('role') or o.get('member')) for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    logs.append(f"Created stage channel: **{channel_name}**{perm_note}")
+                elif ch_type in ("announcement", "news"):
+                    is_news = "COMMUNITY" in guild.features
+                    kwargs = {
+                        "name": channel_name,
+                        "category": category,
+                        "topic": ch_data.get("topic", ""),
+                        "slowmode_delay": ch_data.get("slowmode", 0),
+                        "nsfw": ch_data.get("nsfw", False),
+                    }
+                    if is_news:
+                        kwargs["news"] = True
+                    if "permission_overwrites" in ch_data:
+                        kwargs["overwrites"] = ch_overwrites
+                    ac = await guild.create_text_channel(**kwargs)
+                    created_channels.append(ac)
+                    label = "announcement" if is_news else "text (community off)"
+                    perm_note = f" (perms: {', '.join(str(o.get('role') or o.get('member')) for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    logs.append(f"Created {label} channel: **#{channel_name}**{perm_note}")
                 elif ch_type == "forum":
                     kwargs = {
                         "name": channel_name,
@@ -205,10 +259,10 @@ async def build_server(
                         kwargs["overwrites"] = ch_overwrites
                     forum = await guild.create_forum(**kwargs)
                     created_channels.append(forum)
-                    perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    perm_note = f" (perms: {', '.join(str(o.get('role') or o.get('member')) for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
                     logs.append(f"Created forum channel: **{channel_name}**{perm_note}")
                 else:
-                    kwargs: dict[str, Any] = {
+                    kwargs = {
                         "name": channel_name,
                         "category": category,
                         "topic": ch_data.get("topic", ""),
@@ -219,7 +273,7 @@ async def build_server(
                         kwargs["overwrites"] = ch_overwrites
                     tc = await guild.create_text_channel(**kwargs)
                     created_channels.append(tc)
-                    perm_note = f" (perms: {', '.join(o.get('role','') for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
+                    perm_note = f" (perms: {', '.join(str(o.get('role') or o.get('member')) for o in ch_data.get('permission_overwrites', []))})" if ch_overwrites else ""
                     logs.append(f"Created text channel: **#{channel_name}**{perm_note}")
 
                     # Optional thread creation
@@ -228,17 +282,31 @@ async def build_server(
                             name=thread_data["name"],
                             auto_archive_duration=thread_data.get("auto_archive", 1440),
                         )
-                        logs.append(f"  \u2514 Created thread: **{thread_data['name']}**")
+                        logs.append(f"  └ Created thread: **{thread_data['name']}**")
 
                 progress.advance()
                 if progress_msg:
                     await _update_progress(progress_msg, progress)
+
+        if build_repo and build_id:
+            all_created_ids = [r.id for r in created_roles] + [c.id for c in created_channels]
+            await build_repo.complete_build(
+                build_id=build_id,
+                status="completed",
+                created_resources=all_created_ids,
+            )
 
     except Exception as exc:
         log.error("Build failed, rolling back: %s", exc)
         failed = await rollback_created(created_channels, created_roles)
         if failed:
             log.error("Build rollback incomplete; manual cleanup required for IDs: %s", failed)
+        if build_repo and build_id:
+            await build_repo.complete_build(
+                build_id=build_id,
+                status="failed",
+                errors=[str(exc)],
+            )
         raise
 
     return logs, role_map

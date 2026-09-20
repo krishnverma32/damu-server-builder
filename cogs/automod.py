@@ -16,10 +16,9 @@ import aiofiles
 import discord
 from discord import app_commands
 from discord.ext import commands
-from motor.motor_asyncio import AsyncIOMotorClient
-
 import config
 from services.embed_service import error_embed, info_embed, success_embed, warning_embed
+from services.repositories import AutoModRepository
 from services.report_service import record_counter
 
 log = logging.getLogger("cogs.automod")
@@ -32,8 +31,6 @@ IMAGE_WINDOW_SECONDS = 10.0
 MAX_IMAGES_PER_WINDOW = 3
 REPEAT_TIMEOUT_MINUTES = 10
 OFFENSE_RESET_HOURS = 24
-MONGO_DB_NAME = "server_builder_bot"
-MONGO_COLLECTION_NAME = "automod_state"
 
 
 class AutoModCog(commands.Cog, name="AutoMod"):
@@ -41,71 +38,21 @@ class AutoModCog(commands.Cog, name="AutoMod"):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.repo = AutoModRepository()
         self._image_windows: dict[tuple[int, int], deque[tuple[float, int, int, int]]] = defaultdict(deque)
         self._offenses: dict[str, Any] = {}
         self._settings: dict[str, Any] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
-        self._mongo_client: AsyncIOMotorClient | None = None
-        self._mongo_available = bool(config.MONGO_URI)
-
-    def _mongo_collection(self):
-        if not self._mongo_available:
-            return None
-        if self._mongo_client is None:
-            self._mongo_client = AsyncIOMotorClient(config.MONGO_URI, serverSelectionTimeoutMS=3000)
-        db = self._mongo_client.get_default_database(default=MONGO_DB_NAME)
-        return db[MONGO_COLLECTION_NAME]
 
     async def _load(self) -> None:
         if self._loaded:
             return
-        collection = self._mongo_collection()
-        if collection is not None:
-            try:
-                doc = await collection.find_one({"_id": "global"})
-                if doc:
-                    self._offenses = doc.get("offenses", {})
-                    self._settings = doc.get("settings", {})
-                    self._loaded = True
-                    return
-            except Exception as exc:
-                log.warning("Mongo AutoMod load failed, using JSON fallback: %s", exc)
-                self._mongo_available = False
-
-        if os.path.exists(config.AUTOMOD_FILE):
-            try:
-                async with aiofiles.open(config.AUTOMOD_FILE, "r", encoding="utf-8") as f:
-                    raw = await f.read()
-                data = json.loads(raw) if raw.strip() else {}
-                if "offenses" in data or "settings" in data:
-                    self._offenses = data.get("offenses", {})
-                    self._settings = data.get("settings", {})
-                else:
-                    self._offenses = data
-                    self._settings = {}
-            except (OSError, json.JSONDecodeError):
-                self._offenses = {}
-                self._settings = {}
+        self._offenses, self._settings = await self.repo.get_state()
         self._loaded = True
 
     async def _save(self) -> None:
-        collection = self._mongo_collection()
-        if collection is not None:
-            try:
-                await collection.update_one(
-                    {"_id": "global"},
-                    {"$set": {"offenses": self._offenses, "settings": self._settings}},
-                    upsert=True,
-                )
-                return
-            except Exception as exc:
-                log.warning("Mongo AutoMod save failed, using JSON fallback: %s", exc)
-                self._mongo_available = False
-
-        os.makedirs(os.path.dirname(config.AUTOMOD_FILE), exist_ok=True)
-        async with aiofiles.open(config.AUTOMOD_FILE, "w", encoding="utf-8") as f:
-            await f.write(json.dumps({"offenses": self._offenses, "settings": self._settings}, indent=2))
+        await self.repo.save_state(self._offenses, self._settings)
 
     @staticmethod
     def _key(guild_id: int, user_id: int) -> str:
@@ -349,7 +296,7 @@ class AutoModCog(commands.Cog, name="AutoMod"):
                 "**Image raids:** delete all tracked image messages + immediate 10 minute timeout\n"
                 f"**Slow drip catch:** images stay in one chain while each gap is under {IMAGE_WINDOW_SECONDS:.0f}s\n"
                 "**Timeout alerts:** DM server owner and bot owner\n"
-                f"**Storage:** {'MongoDB' if self._mongo_available else 'local JSON fallback'}\n"
+                "**Storage:** SQLite (unified repository)\n"
                 f"**Tracked users in this server:** {total}\n"
                 f"**Ignored channels:** {len(ignored_channels)}\n"
                 f"**Bypass roles:** {len(bypass_roles)}"

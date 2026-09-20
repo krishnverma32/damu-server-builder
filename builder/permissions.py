@@ -50,3 +50,312 @@ def _resolve_permissions(perm_names: list[str]) -> discord.Permissions:
     return discord.Permissions(value)
 
 
+resolve_permissions = _resolve_permissions
+
+# ── Category grouping for the permission editor UI ─────────────────────────────
+PERMISSION_CATEGORIES: dict[str, list[str]] = {
+    "GENERAL": [
+        "view_channel",
+        "manage_channels",
+        "manage_roles",
+        "manage_webhooks",
+        "view_audit_log",
+    ],
+    "MESSAGES": [
+        "send_messages",
+        "send_messages_in_threads",
+        "embed_links",
+        "attach_files",
+        "add_reactions",
+        "mention_everyone",
+        "read_message_history",
+        "use_external_emojis",
+    ],
+    "MODERATION": [
+        "manage_messages",
+        "manage_threads",
+        "kick_members",
+        "ban_members",
+        "mute_members",
+        "deafen_members",
+        "move_members",
+    ],
+    "VOICE": [
+        "connect",
+        "speak",
+        "mute_members",
+        "deafen_members",
+        "move_members",
+    ],
+}
+
+# ── Reusable Channel Permission Presets ────────────────────────────────────────
+PERMISSION_PRESETS: dict[str, dict[str, dict[str, list[str]]]] = {
+    "Public Chat": {
+        "@everyone": {
+            "allow": ["view_channel", "send_messages", "read_message_history", "add_reactions"],
+            "deny": ["mention_everyone"],
+        }
+    },
+    "Read Only": {
+        "@everyone": {
+            "allow": ["view_channel", "read_message_history", "add_reactions"],
+            "deny": ["send_messages", "send_messages_in_threads", "create_public_threads"],
+        }
+    },
+    "Announcement": {
+        "@everyone": {
+            "allow": ["view_channel", "read_message_history"],
+            "deny": ["send_messages", "send_messages_in_threads", "add_reactions"],
+        },
+        "Moderator": {
+            "allow": ["send_messages", "mention_everyone"],
+            "deny": [],
+        },
+        "Admin": {
+            "allow": ["send_messages", "mention_everyone"],
+            "deny": [],
+        },
+    },
+    "Staff Only": {
+        "@everyone": {
+            "allow": [],
+            "deny": ["view_channel"],
+        },
+        "Staff": {
+            "allow": ["view_channel", "send_messages", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+        "Moderator": {
+            "allow": ["view_channel", "send_messages", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+        "Admin": {
+            "allow": ["view_channel", "send_messages", "manage_channels", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+    },
+    "Admin Only": {
+        "@everyone": {
+            "allow": [],
+            "deny": ["view_channel"],
+        },
+        "Admin": {
+            "allow": ["view_channel", "send_messages", "manage_channels", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+    },
+    "Moderator Only": {
+        "@everyone": {
+            "allow": [],
+            "deny": ["view_channel"],
+        },
+        "Moderator": {
+            "allow": ["view_channel", "send_messages", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+    },
+    "VIP Only": {
+        "@everyone": {
+            "allow": [],
+            "deny": ["view_channel"],
+        },
+        "VIP": {
+            "allow": ["view_channel", "send_messages", "embed_links", "attach_files", "read_message_history"],
+            "deny": [],
+        },
+    },
+    "Media": {
+        "@everyone": {
+            "allow": ["view_channel", "send_messages", "embed_links", "attach_files", "add_reactions", "read_message_history"],
+            "deny": [],
+        }
+    },
+    "Support": {
+        "@everyone": {
+            "allow": ["view_channel", "send_messages", "read_message_history"],
+            "deny": [],
+        },
+        "Support": {
+            "allow": ["view_channel", "send_messages", "manage_messages", "read_message_history"],
+            "deny": [],
+        },
+    },
+    "Private": {
+        "@everyone": {
+            "allow": [],
+            "deny": ["view_channel"],
+        }
+    },
+    "Voice Members": {
+        "@everyone": {
+            "allow": ["view_channel", "connect", "speak"],
+            "deny": ["mute_members", "deafen_members", "move_members"],
+        }
+    },
+    "Creator": {
+        "@everyone": {
+            "allow": ["view_channel", "read_message_history"],
+            "deny": ["send_messages"],
+        },
+        "Creator": {
+            "allow": ["view_channel", "send_messages", "embed_links", "attach_files", "mention_everyone"],
+            "deny": [],
+        },
+    },
+}
+
+# ── Reusable Role Presets ──────────────────────────────────────────────────────
+ROLE_PRESETS: dict[str, dict[str, Any]] = {
+    "Owner": {
+        "color": "gold",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": ["administrator"],
+    },
+    "Admin": {
+        "color": "red",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "administrator",
+            "manage_guild",
+            "manage_roles",
+            "manage_channels",
+            "kick_members",
+            "ban_members",
+            "manage_messages",
+            "view_audit_log",
+        ],
+    },
+    "Moderator": {
+        "color": "blue",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "manage_messages",
+            "kick_members",
+            "ban_members",
+            "mute_members",
+            "move_members",
+            "manage_threads",
+            "view_channel",
+            "read_message_history",
+        ],
+    },
+    "Trial Moderator": {
+        "color": "teal",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "manage_messages",
+            "mute_members",
+            "view_channel",
+            "read_message_history",
+        ],
+    },
+    "Helper": {
+        "color": "emerald",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "manage_messages",
+            "view_channel",
+            "read_message_history",
+        ],
+    },
+    "Support": {
+        "color": "green",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "manage_threads",
+            "view_channel",
+            "send_messages",
+            "read_message_history",
+        ],
+    },
+    "VIP": {
+        "color": "purple",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "view_channel",
+            "send_messages",
+            "embed_links",
+            "attach_files",
+            "add_reactions",
+            "use_external_emojis",
+            "connect",
+            "speak",
+        ],
+    },
+    "Creator": {
+        "color": "magenta",
+        "hoist": True,
+        "mentionable": True,
+        "permissions": [
+            "view_channel",
+            "send_messages",
+            "embed_links",
+            "attach_files",
+            "add_reactions",
+            "mention_everyone",
+        ],
+    },
+    "Verified Member": {
+        "color": "blurple",
+        "hoist": False,
+        "mentionable": False,
+        "permissions": [
+            "view_channel",
+            "send_messages",
+            "add_reactions",
+            "use_external_emojis",
+            "connect",
+            "speak",
+        ],
+    },
+    "Muted": {
+        "color": "grey",
+        "hoist": False,
+        "mentionable": False,
+        "permissions": [],
+    },
+    "Bot": {
+        "color": "orange",
+        "hoist": True,
+        "mentionable": False,
+        "permissions": [
+            "view_channel",
+            "send_messages",
+            "embed_links",
+            "attach_files",
+            "add_reactions",
+            "read_message_history",
+        ],
+    },
+}
+
+
+def tri_state_to_overwrite(states: dict[str, bool | None]) -> discord.PermissionOverwrite:
+    """Construct a discord.PermissionOverwrite from a dict of {perm_name: True|False|None}."""
+    kwargs: dict[str, bool | None] = {}
+    for name, val in states.items():
+        attr = name.lower()
+        if hasattr(discord.PermissionOverwrite, attr):
+            kwargs[attr] = val
+    return discord.PermissionOverwrite(**kwargs)
+
+
+def overwrite_to_tri_state(overwrite: discord.PermissionOverwrite) -> dict[str, bool | None]:
+    """Convert a discord.PermissionOverwrite into a dict of {perm_name: True|False|None}."""
+    result: dict[str, bool | None] = {}
+    for perm_name in _PERM_MAP:
+        if hasattr(overwrite, perm_name):
+            val = getattr(overwrite, perm_name)
+            result[perm_name] = val
+    return result
+
+
+

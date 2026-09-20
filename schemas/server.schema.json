@@ -402,7 +402,9 @@
           "enum": [
             "text",
             "voice",
-            "forum"
+            "forum",
+            "stage",
+            "announcement"
           ]
         },
         "topic": {
@@ -423,6 +425,12 @@
             "type": "object",
             "properties": {
               "role": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "\\S"
+              },
+              "member": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 100,
@@ -509,8 +517,17 @@
                 "uniqueItems": true
               }
             },
-            "required": [
-              "role"
+            "anyOf": [
+              {
+                "required": [
+                  "role"
+                ]
+              },
+              {
+                "required": [
+                  "member"
+                ]
+              }
             ],
             "additionalProperties": false
           },
@@ -681,6 +698,12 @@
                 "maxLength": 100,
                 "pattern": "\\S"
               },
+              "member": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "\\S"
+              },
               "allow": {
                 "type": "array",
                 "items": {
@@ -762,8 +785,17 @@
                 "uniqueItems": true
               }
             },
-            "required": [
-              "role"
+            "anyOf": [
+              {
+                "required": [
+                  "role"
+                ]
+              },
+              {
+                "required": [
+                  "member"
+                ]
+              }
             ],
             "additionalProperties": false
           },

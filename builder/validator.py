@@ -111,13 +111,13 @@ def validate_config(raw: Any) -> dict[str, Any]:
             channels.add(name)
             _check_overwrites(channel, path, role_names, issues)
             allowed = {"name", "type", "font", "name_font", "name_style", "permission_overwrites"}
-            if kind == "voice":
-                allowed |= {"bitrate", "user_limit"}
-            elif kind == "text":
+            if kind in ("voice", "stage"):
+                allowed |= {"bitrate", "user_limit", "topic"}
+            elif kind in ("text", "announcement"):
                 allowed |= {"topic", "slowmode", "nsfw", "threads"}
                 if len(channel.get("topic", "")) > 1024:
                     issues.append(f"{path}.topic: text topics must be at most 1024 characters.")
-            else:
+            elif kind == "forum":
                 allowed |= {"topic", "slowmode", "nsfw", "thread_slowmode", "auto_archive",
                             "tags", "default_sort_order", "default_layout", "default_reaction_emoji"}
                 tags = [tag["name"] for tag in channel.get("tags", [])]
@@ -133,12 +133,21 @@ def validate_config(raw: Any) -> dict[str, Any]:
 def _check_overwrites(data: dict[str, Any], path: str, roles: set[str], issues: list[str]) -> None:
     seen: set[str] = set()
     for i, overwrite in enumerate(data.get("permission_overwrites", [])):
-        target = overwrite["role"]
         location = f"{path}.permission_overwrites[{i}]"
-        if target not in roles and target != "@everyone":
-            issues.append(f"{location}.role: declare {target!r} in roles first.")
+        target_role = overwrite.get("role")
+        target_member = overwrite.get("member")
+        if target_role:
+            if target_role not in roles and target_role != "@everyone":
+                issues.append(f"{location}.role: declare {target_role!r} in roles first.")
+            target = f"role:{target_role}"
+        elif target_member:
+            target = f"member:{target_member}"
+        else:
+            issues.append(f"{location}: overwrite must specify either 'role' or 'member'.")
+            continue
+
         if target in seen:
-            issues.append(f"{location}.role: duplicate overwrite target.")
+            issues.append(f"{location}: duplicate overwrite target {target!r}.")
         seen.add(target)
         allow = _resolve_permissions(overwrite.get("allow", []))
         deny = _resolve_permissions(overwrite.get("deny", []))

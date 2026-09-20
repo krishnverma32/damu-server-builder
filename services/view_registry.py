@@ -30,6 +30,8 @@ class ViewRegistry:
             return "ticket_panel"
         if name == "TicketControlView":
             return "ticket_control"
+        if name == "VerificationView":
+            return "verification"
         return name
 
     async def add_runtime_view(
@@ -115,4 +117,8 @@ class ViewRegistry:
             from cogs.ticket_system import TicketControlView
 
             return TicketControlView()
+        if view_type == "verification":
+            from cogs.verification import VerificationView
+
+            return VerificationView()
         return None

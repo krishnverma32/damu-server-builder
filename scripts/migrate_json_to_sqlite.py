@@ -114,14 +114,79 @@ async def migrate_tickets() -> int:
     return count
 
 
+async def migrate_automod() -> int:
+    db = get_database()
+    conn = await db.connect()
+    records = _load_json(config.AUTOMOD_FILE)
+    if not records:
+        return 0
+    offenses = records.get("offenses", {})
+    settings = records.get("settings", {})
+    if "offenses" not in records and "settings" not in records:
+        settings = records
+        offenses = {}
+    payload = {"offenses": offenses, "settings": settings}
+    await conn.execute(
+        """
+        INSERT INTO guild_settings (guild_id, section, data, updated_at)
+        VALUES ('global', 'automod_state', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(guild_id, section) DO UPDATE SET
+            data = excluded.data,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (json.dumps(payload),),
+    )
+    await conn.commit()
+    return len(settings) + len(offenses)
+
+
+async def migrate_warnings() -> int:
+    db = get_database()
+    conn = await db.connect()
+    records = _load_json(config.WARNINGS_FILE)
+    count = 0
+    for key, warnings in records.items():
+        if not isinstance(warnings, list):
+            continue
+        parts = key.split("_")
+        if len(parts) >= 2:
+            guild_id, user_id = parts[0], parts[1]
+        else:
+            continue
+        for w in warnings:
+            if not isinstance(w, dict):
+                continue
+            await conn.execute(
+                """
+                INSERT INTO moderation_warnings (guild_id, user_id, mod_id, reason, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(guild_id),
+                    str(user_id),
+                    str(w.get("mod_id", 0)),
+                    w.get("reason", "No reason provided"),
+                    w.get("timestamp") or "2026-01-01 00:00:00",
+                ),
+            )
+            count += 1
+    await conn.commit()
+    return count
+
+
 async def main() -> None:
     db = get_database()
     await db.create_tables()
     ai_count = await migrate_ai_memory()
     level_count = await migrate_levels()
     ticket_count = await migrate_tickets()
+    automod_count = await migrate_automod()
+    warnings_count = await migrate_warnings()
     await db.close()
-    print(f"migrated: ai_memory={ai_count}, levels={level_count}, tickets={ticket_count}")
+    print(
+        f"migrated: ai_memory={ai_count}, levels={level_count}, tickets={ticket_count}, "
+        f"automod={automod_count}, warnings={warnings_count}"
+    )
 
 
 if __name__ == "__main__":

@@ -1,212 +1,217 @@
-# Damu Server Builder
+# Damu — Discord Server Platform & Server Builder
 
-A Python Discord bot built with `discord.py` 2.x for building, securing, and managing Discord servers. It includes a server builder, AI assistant, tickets, verification, automod, moderation, welcome/dashboard tools, analytics, leveling, and utility commands.
+A powerful Python Discord bot built with `discord.py` 2.x for designing, building, configuring, securing, and managing Discord servers.
 
-The bot is Python-only. Old Next.js scaffold files were removed so contributors can focus on the Discord bot code.
+Damu turns complex Discord server setup into a smooth, interactive experience with:
+- **Interactive Server Builder**: Create any channel under any category with custom three-state permissions without touching JSON.
+- **Natural Language Server Editor**: Describe intended modifications in plain English; AI safely generates structured diff proposals without direct mutation.
+- **Templates & Custom JSON**: Shipped templates (Gaming, Community, Study, Business) or custom JSON schemas for full infrastructure-as-code automation.
+- **Safe Pipeline**: Every build executes through: `Validate` → `Plan` → `Diff` → `Preview` → `Confirm` → `Execute` → `Rollback`.
+- **Server Snapshots & Rollback**: Versioned server backups, one-click restores, and persistent build rollbacks tracked in SQLite.
+- **Security Audit & Guided Remediation**: Automatic scans for bot role hierarchy, exposed `@everyone` permissions, unmanaged channels, and one-click fixes.
+- **Unified Command Center**: Interactive `/dashboard` for managing Builder, Permissions, Roles, AutoMod, Verification, Tickets, and Moderation.
 
-## Features
+---
 
-- **Server Builder**: Build channels, categories, forums, roles, permissions, verification areas, and server icons from JSON templates or AI-generated schemas.
-- **AI Chat**: OpenRouter-powered assistant with personas, memory, cooldowns, per-user token budgets, global token guard, and per-server AI toggle.
-- **Ticket System**: Support tickets with buttons, blacklist controls, transcript generation, staff notifications, and ticket setup commands.
-- **Verification**: Automated verified/unverified roles, verification channel setup, persistent verify button, account age checks, and logs.
-- **AutoMod**: Link and attachment spam protection, repeated-image detection across channels, exception roles/channels, warnings, timeouts, and owner alerts.
-- **Moderation**: Kick, ban, unban, mute, unmute, clear messages, warnings, slowmode, lock, and unlock commands.
-- **Dashboard**: Welcome embeds, welcome images/GIFs, auto roles for humans/bots, commands channel setup, mass role management, and server status.
-- **Analytics**: Message, command, and member activity tracking with summary commands.
-- **Leveling**: Message XP, rank cards, level-up notifications, and admin XP controls.
-- **Utility**: Ping, uptime, bot/server/user/role info, avatar/banner, invite, polls, reminders, and rules embeds.
-- **Admin**: Owner-only slash command sync, cog reloads, cog status, and shutdown.
-
-## Setup
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/krishnverma32/damu-server-builder.git
-   cd damu-server-builder
-   ```
-
-2. Install Python dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Create a `.env` file:
-
-   ```env
-   DISCORD_TOKEN=your_discord_bot_token
-   OPENROUTER_API_KEY=your_openrouter_api_key
-   GIPHY_API_KEY=your_giphy_api_key
-   BOT_OWNER_ID=486555340670894080
-   SERVER_BUILD_OWNER_ID=486555340670894080
-   DATABASE_FILE=data/bot.db
-   ```
-
-4. Run the bot:
-
-   ```bash
-   python main.py
-   ```
-
-   On Windows you can also use:
-
-   ```bat
-   start_bot.bat
-   ```
-
-5. Sync slash commands when needed:
-
-   ```text
-   /sync guild
-   ```
-
-   Use `/sync global` only when you are ready to update production commands.
-
-## Data Migration
-
-The bot now uses SQLite for core state. To migrate old JSON memory, XP, and ticket data:
-
-```bash
-python scripts/migrate_json_to_sqlite.py
-```
-
-The script uses upserts, so it is safe to run more than once.
-
-## Project Structure
+## Defining Workflow
 
 ```text
-main.py                     Bot entry point, keep-alive server, cog loader
-config.py                   Environment configuration and constants
-requirements.txt            Python dependencies
-Procfile                    Render deployment command
-runtime.txt                 Python runtime hint
-start_bot.bat               Windows start helper
-stop_bot.bat                Windows stop helper
-cogs/                       Slash command modules
-  admin.py                  Owner-only sync/reload/shutdown commands
-  ai.py                     AI chat, usage limits, personas, toggles
-  analytics.py              Server analytics commands
-  automod.py                Spam/link/attachment protection
-  dashboard.py              Welcome, auto-role, command channel, mass roles
-  leveling.py               XP and rank commands
-  moderation.py             Moderation commands
-  server_builder.py         Server JSON/template builder
-  ticket_system.py          Ticket panel and ticket management
-  utility.py                Utility and rules commands
-  verification.py           Verification setup and verify buttons
-services/                   Business logic and persistence helpers
-  ai_service.py             OpenRouter integration and AI memory
-  database.py               Async SQLite helper
-  embed_service.py          Shared embed factory
-  json_builder.py           Server schema parsing/building
-  level_service.py          SQLite-backed XP service
-  permission_service.py     Permission sync and checks
-  ticket_service.py         SQLite-backed ticket service
-utils/                      Shared helpers
-  decorators.py             Command checks
-  helpers.py                Text/time/helper utilities
-  logger.py                 Logging setup
-  paginator.py              Pagination views
-scripts/                    Maintenance scripts
-  cleanup_nextjs.sh         Removes old Next.js scaffold files
-  migrate_json_to_sqlite.py Migrates old JSON state into SQLite
-data/                       Runtime SQLite/JSON data, ignored by Git
+USER REQUEST (Interactive UI / JSON / AI)
+     ↓
+SERVER CONFIG
+     ↓
+VALIDATION (JSON Schema & Discord Limits)
+     ↓
+PERMISSION ANALYSIS (Three-State: Allow / Deny / Inherit)
+     ↓
+CONFLICT DETECTION (Hierarchy, Duplicates, Limits)
+     ↓
+DETERMINISTIC DIFF (Create, Reuse, Update, Delete)
+     ↓
+INTERACTIVE PREVIEW ([Build] [Edit] [Permissions] [Diff] [Cancel])
+     ↓
+ADMINISTRATOR CONFIRMATION
+     ↓
+BUILD ENGINE (Auto-assigned Build #ID & Progress Bar)
+     ↓
+AUDIT LOG & PERSISTENT HISTORY
 ```
 
-## Commands
+---
 
-### Server Builder
+## Setup & Quickstart
 
-- `/setup_server`: Build or preview a server from a template or JSON.
-- `/server_template_list`: List available server templates.
-- `/server_template_detail`: Show detailed template contents.
-- `/server_json_example`: Send a copyable example JSON schema.
-- `/server_builder_bypass_add`: Allow another user to build servers without approval.
-- `/server_builder_bypass_remove`: Remove a bypass user.
-- `/perm_sync`: Check or repair permissions after a build.
+### 1. Requirements
 
-### AI
+- Python 3.10, 3.11, 3.12, 3.13, or 3.14
+- Discord Bot Token with Server Members Intent & Message Content Intent enabled in the Discord Developer Portal
 
-- `/ai chat`: Chat with the AI assistant.
-- `/ai reset`: Clear your AI memory.
-- `/ai persona`: Change the assistant persona.
-- `/ai usage`: Show your remaining daily AI token budget.
-- `/ai stats`: Show server AI usage today.
-- `/ai toggle`: Enable or disable AI commands for the server.
+### 2. Installation
 
-### Tickets
+```bash
+git clone https://github.com/krishnverma32/damu-server-builder.git
+cd damu-server-builder
+pip install -r requirements.txt
+```
 
-- `/setup_tickets`: Configure the ticket panel.
-- `/cancel_delete`: Cancel auto-delete for the current ticket channel.
-- Ticket buttons: create, claim, close, and transcript workflows.
-- `/ticket_blacklist add`, `/ticket_blacklist remove`, `/ticket_blacklist list`: Manage blocked users.
+### 3. Environment Configuration
 
-### Verification
+Create a `.env` file based on `.env.example`:
 
-- `/setupverification`: Create or edit the verification system.
-- `/verification_status`: Show verification configuration.
+```env
+# Required
+DISCORD_TOKEN=your_bot_token_here
+BOT_OWNER_ID=486555340670894080
+SERVER_BUILD_OWNER_ID=486555340670894080
 
-### AutoMod
+# Optional
+DATABASE_FILE=data/bot.db
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+GIPHY_API_KEY=your_giphy_api_key_here
+```
 
-- `/automod_status`: Show AutoMod settings and recent offenses.
-- `/automod_exception`: Add, remove, or list exception roles/channels.
-- `/automod_reset`: Clear a member's AutoMod offenses.
+| Variable | Description | Required | Default |
+| :--- | :--- | :--- | :--- |
+| `DISCORD_TOKEN` | Discord bot application token | **Yes** | — |
+| `BOT_OWNER_ID` | Discord user ID of the primary bot administrator | **Yes** | — |
+| `SERVER_BUILD_OWNER_ID` | Discord user ID authorized to manage builder bypass | **Yes** | — |
+| `DATABASE_FILE` | Path to the SQLite persistence database | No | `data/bot.db` |
+| `OPENROUTER_API_KEY` | OpenRouter API key for Gemini / AI chat & AI server editor | No | Empty |
+| `GIPHY_API_KEY` | Giphy API key for automated welcome GIFs | No | Empty |
 
-### Dashboard
+### 4. Running the Bot
 
-- `/welcome_setup`: Configure welcome embeds, images, and GIFs.
-- `/autorole_setup`: Configure human and bot auto roles.
-- `/commands_channel_setup`: Set the bot commands channel.
-- `/mass_role`: Give or remove a role from all members, bots, or humans.
-- `/dashboard_status`: Show server dashboard settings.
+```bash
+# Windows
+py main.py
 
-### Moderation
+# Linux / macOS
+python3 main.py
+```
 
-- `/kick`, `/ban`, `/unban`
-- `/mute`, `/unmute`
-- `/clear`
-- `/warn`, `/warnings`, `/clearwarnings`
-- `/slowmode`, `/lock`, `/unlock`
+To sync slash commands to your test server:
+```text
+/sync guild
+```
 
-### Leveling
+---
 
-- `/rank`: View a rank card.
-- `/setxp`: Set a member's XP.
+## Commands Reference
 
-### Analytics
+### 🏗️ Interactive Server Builder
 
-- `/analytics messages`: Show messages per day for the last 7 days.
-- `/analytics members`: Show join and leave trends.
-- `/analytics commands`: Show most-used commands.
+| Command | Permissions | Description & Examples |
+| :--- | :--- | :--- |
+| `/dashboard` | Administrator | Interactive management center across all bot modules |
+| `/create_channel` | Manage Channels | Step-by-step UI to create Text, Voice, Forum, Stage, or Announcement channels under any category |
+| `/create_category` | Manage Channels | Create a category with permission presets and quick-add channel flow |
+| `/channel_permissions` | Manage Roles | Interactive 3-state permission editor (`Allow`, `Deny`, `Inherit`) for any channel |
+| `/permission_matrix` | Manage Roles | Visual matrix grid comparing roles vs key permissions (`View`, `Send`, `Files`, `Embed`, `Manage`) |
+| `/clone_channel` | Manage Channels | Duplicate a channel with all overwrites, topics, slowmodes, and tags |
+| `/clone_category` | Manage Channels | Duplicate an entire category and all of its contained channels |
+| `/create_role` | Manage Roles | Create a role with presets (`Admin`, `Moderator`, `VIP`, `Support`, `Creator`...) and hierarchy validation |
+| `/edit_role` | Manage Roles | Modify role name, color, hoist, and mentionable settings safely |
+| `/delete_role` | Manage Roles | Delete a role with hierarchy check protection |
 
-### Utility
+### 🚀 Templates & Full Builds
 
-- `/ping`, `/uptime`, `/botinfo`
-- `/serverinfo`, `/userinfo`, `/roleinfo`
-- `/avatar`, `/banner`, `/invite`
-- `/poll`, `/remind`
-- `/send_rules`: Send a rules embed with an optional uploaded image.
+| Command | Permissions | Description |
+| :--- | :--- | :--- |
+| `/setup_server` | Administrator | Build from curated templates (`gaming`, `community`, `study`, `business`) |
+| `/setup_custom` | Administrator | Build from an attached `.json` file or pasted text |
+| `/setup_paste_json` | Administrator | Open a Discord modal to paste JSON and build |
+| `/build_preview` | Administrator | Side-effect-free preflight check showing required actions, warnings, and diff |
+| `/server_templates` | Everyone | Browse summaries and channel counts of bundled templates |
+| `/template_details` | Everyone | View detailed roles, categories, and channels of a template |
+| `/example_template` | Everyone | Download an editable example JSON template |
+| `/server_json` | Everyone | Export schema definition or template JSON |
+| `/perm_sync_check` | Administrator | Verify live server permissions against template / last build JSON |
 
-### Admin
+### 💾 Snapshots, Export, Import & Rollback
 
-- `/sync`: Manually sync slash commands.
-- `/reload`: Reload one cog or all cogs.
-- `/cogs`: Show loaded and failed cogs.
-- `/shutdown`: Gracefully stop the bot.
+| Command | Permissions | Description |
+| :--- | :--- | :--- |
+| `/server_snapshot` | Administrator | Capture a versioned backup of all roles, categories, channels, and permissions |
+| `/snapshot_list` | Administrator | List all saved snapshots for the server |
+| `/snapshot_restore` | Administrator | Restore a layout safely through preflight preview and build engine |
+| `/server_export` | Administrator | Download complete server structure as a clean JSON file (no secrets) |
+| `/server_import` | Administrator | Upload an exported JSON file, inspect diff, and build safely |
+| `/build_history` | Administrator | View past server builds recorded with auto-assigned `Build #ID`s |
+| `/build_rollback` | Administrator | Roll back resources created by a specific build ID without affecting other resources |
 
-## Contributing
+### 🛡️ Security Audit & Server Fix
 
-Use the existing cog/service/utils pattern:
+| Command | Permissions | Description |
+| :--- | :--- | :--- |
+| `/server_audit` | Administrator | Comprehensive security scan: bot hierarchy, `@everyone` privileges, log channels |
+| `/server_fix` | Administrator | Safe guided remediation for detected security vulnerabilities |
 
-- Put Discord slash commands and event listeners in `cogs/`.
-- Put reusable business logic and persistence code in `services/`.
-- Put small generic helpers in `utils/`.
-- Keep command responses embed-based using `services/embed_service.py`.
-- Keep runtime data inside `data/`, which is ignored by Git.
-- Run `python -m compileall -q main.py config.py cogs services utils scripts` before committing Python changes.
+### 🤖 AI Natural Language Editor
+
+| Command | Permissions | Description |
+| :--- | :--- | :--- |
+| `/ai_edit_server` | Administrator | Plain English instructions (e.g. *"Make #announcements read-only"*, *"Add a private staff category"*) translated into validated diff proposals |
+| `/generate_server` | Administrator | AI generates an entire themed server schema from a prompt |
+| `/ai chat` | Everyone | OpenRouter conversational assistant with per-user budgets |
+
+---
+
+## Permission Modeling
+
+### Three-State Channel Overwrites
+
+Discord permission inheritance relies on three states:
+- **`Allow` (`True`)**: Explicitly grant permission.
+- **`Deny` (`False`)**: Explicitly deny permission.
+- **`Inherit / Neutral` (`None`)**: Inherit permission from the category or default server role.
+
+```text
+#media
+@everyone    View: ✅ Allow | Send: ✅ Allow | Attach Files: ➖ Inherit
+@VIP         View: ✅ Allow | Send: ✅ Allow | Attach Files: ✅ Allow
+```
+
+### Permission Presets
+
+Built-in presets configurable via dropdown in `/create_channel`, `/create_category`, and `/channel_permissions`:
+- **Public Chat**: View, send, history, reactions enabled; mention everyone disabled.
+- **Read Only**: View and history enabled; send messages and threads disabled.
+- **Announcement**: Public read-only; Moderator & Admin send and mention enabled.
+- **Staff Only**: `@everyone` view denied; Staff, Moderator, Admin allowed.
+- **Admin Only**: Restricted strictly to Admin roles.
+- **VIP Only**: `@everyone` denied; VIP allowed media and chat.
+- **Media**: Image attachments, embed links, reactions enabled.
+- **Support**: Public read/send; Support role manage messages enabled.
+- **Voice Members**: Connect and speak enabled; mute and move disabled.
+
+---
+
+## Hierarchy Validation & Safety
+
+Before executing role modifications, channel updates, or member actions, Damu validates:
+1. **Bot Role Position**: Ensures Damu's role is positioned higher than the target role.
+2. **User Hierarchy**: Prevents administrators from modifying roles higher than their own.
+3. **Managed & Default Roles**: Protects `@everyone` and bot integration roles from invalid mutation.
+4. **AI Mutation Guard**: AI can only propose configuration deltas; execution is strictly handled by the deterministic engine after human review.
+
+---
+
+## Testing & Continuous Integration
+
+Run the comprehensive test suite locally:
+
+```bash
+# Bytecode compilation check
+python -m compileall -q main.py config.py cogs services builder utils tests
+
+# Run unit tests
+pytest -v
+```
+
+GitHub Actions automatically validates linting, compilation, and unit tests on every push and pull request.
+
+---
 
 ## License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.

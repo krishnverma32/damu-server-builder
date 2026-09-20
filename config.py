@@ -9,8 +9,7 @@ load_dotenv()
 DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 GIPHY_API_KEY: str = os.getenv("GIPHY_API_KEY", "")
-MONGO_URI: str = os.getenv("MONGO_URI", "")
-YOUTUBE_OAUTH_TOKEN_JSON: str = os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "")
+MONGO_URI: str = os.getenv("MONGO_URI", "")  # Optional legacy migration source
 
 # ── Channel / Role IDs ───────────────────────────────────────────────────────
 MOD_LOG_CHANNEL_ID: int = int(os.getenv("MOD_LOG_CHANNEL_ID", "0"))
