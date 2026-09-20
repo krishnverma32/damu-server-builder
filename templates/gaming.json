@@ -1,0 +1,304 @@
+{
+  "server_name": null,
+  "roles": [
+    {
+      "name": "Owner",
+      "color": "gold",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Admin",
+      "color": "red",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Moderator",
+      "color": "green",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "kick_members",
+        "ban_members",
+        "manage_messages",
+        "manage_channels"
+      ]
+    },
+    {
+      "name": "VIP",
+      "color": "magenta",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "embed_links",
+        "attach_files"
+      ]
+    },
+    {
+      "name": "Gamer",
+      "color": "purple",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "connect",
+        "speak"
+      ]
+    },
+    {
+      "name": "Member",
+      "color": "blue",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "\ud83d\udce2 INFO",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages"
+          ]
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcdcrules",
+          "topic": "Read the rules before chatting!"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udce3announcements",
+          "topic": "Server announcements",
+          "permission_overwrites": [
+            {
+              "role": "Admin",
+              "allow": [
+                "send_messages",
+                "mention_everyone"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Moderator",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udc4bwelcome",
+          "topic": "Welcome new members!"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcac GENERAL",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcacgeneral-chat",
+          "topic": "Talk about anything"
+        },
+        {
+          "type": "text",
+          "name": "\ud83e\udd16bot-commands",
+          "topic": "Use bot commands here"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\uddbcmedia",
+          "topic": "Share images, videos, memes",
+          "permission_overwrites": [
+            {
+              "role": "Member",
+              "allow": [
+                "read_messages",
+                "attach_files",
+                "embed_links"
+              ],
+              "deny": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfae GAMING",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83c\udfaegame-chat",
+          "topic": "Talk about games"
+        },
+        {
+          "type": "text",
+          "name": "\ud83c\udfc6clips-highlights",
+          "topic": "Share your best moments"
+        },
+        {
+          "type": "text",
+          "name": "\ud83c\udfaflooking-for-group",
+          "topic": "Find teammates"
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfae Game Lobby",
+          "bitrate": 96000,
+          "user_limit": 0
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfae Game Room 1",
+          "bitrate": 96000,
+          "user_limit": 5,
+          "permission_overwrites": [
+            {
+              "role": "Gamer",
+              "allow": [
+                "connect",
+                "speak"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfae Game Room 2",
+          "bitrate": 96000,
+          "user_limit": 5,
+          "permission_overwrites": [
+            {
+              "role": "Gamer",
+              "allow": [
+                "connect",
+                "speak"
+              ],
+              "deny": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfb5 MUSIC & CHILL",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83c\udfb5music-requests",
+          "topic": "Request songs here"
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfb5 Music Lounge",
+          "bitrate": 96000,
+          "user_limit": 0,
+          "permission_overwrites": [
+            {
+              "role": "VIP",
+              "allow": [
+                "connect",
+                "speak"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Member",
+              "allow": [
+                "connect"
+              ],
+              "deny": [
+                "speak"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "voice",
+          "name": "\u2615 Chill Zone",
+          "bitrate": 64000,
+          "user_limit": 10
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd12 STAFF",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Moderator",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udccbmod-log",
+          "topic": "Moderation logs"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcacstaff-chat",
+          "topic": "Staff discussion"
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udd12 Staff Room",
+          "bitrate": 64000,
+          "user_limit": 0
+        }
+      ]
+    }
+  ],
+  "auto_assign": "Member"
+}

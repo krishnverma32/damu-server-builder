@@ -1,0 +1,441 @@
+{
+  "server_name": "Nova Creator Hub",
+  "server_font": "bold",
+  "category_font": "small_caps",
+  "channel_font": "small_caps",
+  "role_font": "bold",
+  "roles": [
+    {
+      "name": "Founder",
+      "color": "gold",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Admin",
+      "color": "crimson",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Moderator",
+      "color": "emerald",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "kick_members",
+        "ban_members",
+        "manage_messages",
+        "manage_channels",
+        "manage_threads",
+        "mute_members"
+      ]
+    },
+    {
+      "name": "Creator",
+      "color": "magenta",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "embed_links",
+        "attach_files"
+      ]
+    },
+    {
+      "name": "Verified Member",
+      "color": "blue",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "read_message_history",
+        "add_reactions",
+        "use_application_commands",
+        "connect",
+        "speak"
+      ]
+    },
+    {
+      "name": "Muted",
+      "color": "grey",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "read_messages"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "Start Here",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages"
+          ]
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "send_messages",
+            "mention_everyone"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Moderator",
+          "allow": [
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "rules",
+          "topic": "Read the rules before chatting.",
+          "slowmode": 0,
+          "permission_overwrites": [
+            {
+              "role": "@everyone",
+              "allow": [
+                "read_messages"
+              ],
+              "deny": [
+                "send_messages"
+              ]
+            },
+            {
+              "role": "Admin",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "announcements",
+          "topic": "Official server updates and launch notes.",
+          "permission_overwrites": [
+            {
+              "role": "@everyone",
+              "allow": [
+                "read_messages"
+              ],
+              "deny": [
+                "send_messages"
+              ]
+            },
+            {
+              "role": "Admin",
+              "allow": [
+                "send_messages",
+                "mention_everyone"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Moderator",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "welcome",
+          "topic": "Welcome messages and member join notices.",
+          "permission_overwrites": [
+            {
+              "role": "@everyone",
+              "allow": [
+                "read_messages"
+              ],
+              "deny": [
+                "send_messages"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Verified Member",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Muted",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages",
+            "add_reactions"
+          ]
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "general-chat",
+          "topic": "Main community chat.",
+          "slowmode": 2
+        },
+        {
+          "type": "text",
+          "name": "media-share",
+          "topic": "Share images, edits, clips, and screenshots.",
+          "slowmode": 5,
+          "permission_overwrites": [
+            {
+              "role": "Verified Member",
+              "allow": [
+                "attach_files",
+                "embed_links"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "forum",
+          "name": "community-posts",
+          "topic": "Create organized discussion posts.",
+          "slowmode": 10,
+          "thread_slowmode": 15,
+          "auto_archive": 1440,
+          "default_layout": "list",
+          "default_sort_order": "latest_activity",
+          "tags": [
+            {
+              "name": "Question",
+              "emoji": "\u2753"
+            },
+            {
+              "name": "Guide",
+              "emoji": "\ud83d\udcd8"
+            },
+            {
+              "name": "Showcase",
+              "emoji": "\u2728"
+            },
+            {
+              "name": "Solved",
+              "emoji": "\u2705",
+              "moderated": true
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "bot-commands",
+          "topic": "Use slash commands here.",
+          "slowmode": 3
+        }
+      ]
+    },
+    {
+      "name": "Creator Zone",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Creator",
+          "allow": [
+            "read_messages",
+            "send_messages",
+            "attach_files",
+            "embed_links"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "manage_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Moderator",
+          "allow": [
+            "manage_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "creator-chat",
+          "topic": "Private creator collaboration chat."
+        },
+        {
+          "type": "forum",
+          "name": "project-showcase",
+          "topic": "Post detailed project showcases and receive feedback.",
+          "default_layout": "gallery",
+          "tags": [
+            {
+              "name": "Website",
+              "emoji": "\ud83c\udf10"
+            },
+            {
+              "name": "Bot",
+              "emoji": "\ud83e\udd16"
+            },
+            {
+              "name": "Design",
+              "emoji": "\ud83c\udfa8"
+            },
+            {
+              "name": "Feedback Wanted",
+              "emoji": "\ud83d\udcac"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Voice",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages",
+            "connect"
+          ]
+        },
+        {
+          "role": "Verified Member",
+          "allow": [
+            "read_messages",
+            "connect",
+            "speak"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "voice",
+          "name": "General Voice",
+          "bitrate": 96000,
+          "user_limit": 0
+        },
+        {
+          "type": "voice",
+          "name": "Focus Room",
+          "bitrate": 64000,
+          "user_limit": 5
+        },
+        {
+          "type": "voice",
+          "name": "Creator Stage",
+          "bitrate": 96000,
+          "user_limit": 10
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages",
+            "manage_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Moderator",
+          "allow": [
+            "read_messages",
+            "send_messages",
+            "manage_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "staff-chat",
+          "topic": "Private staff coordination."
+        },
+        {
+          "type": "text",
+          "name": "mod-log",
+          "topic": "Moderation logs and staff notes."
+        },
+        {
+          "type": "text",
+          "name": "reports",
+          "topic": "User reports and internal actions."
+        },
+        {
+          "type": "voice",
+          "name": "Staff Voice",
+          "bitrate": 64000,
+          "user_limit": 0
+        }
+      ]
+    }
+  ],
+  "auto_assign": "Verified Member",
+  "verification": {
+    "enabled": true,
+    "embed_title": "Verify To Enter Nova Creator Hub",
+    "embed_description": "Welcome to **{server}**.\nRead the rules, then press Verify to unlock community channels.",
+    "button_text": "Verify",
+    "account_age_check": true,
+    "min_account_age_days": 3
+  }
+}
