@@ -1,0 +1,270 @@
+{
+  "schema_version": "2.0",
+  "template_version": "1.0",
+  "server_name": null,
+  "roles": [
+    {
+      "name": "Owner",
+      "color": "gold",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Admin",
+      "color": "crimson",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Tutor",
+      "color": "emerald",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "manage_messages",
+        "kick_members"
+      ]
+    },
+    {
+      "name": "Student",
+      "color": "blue",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "\ud83d\udccb INFO",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages"
+          ]
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcdcrules",
+          "topic": "Read before participating"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udce3announcements",
+          "topic": "Updates & schedules",
+          "permission_overwrites": [
+            {
+              "role": "Admin",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Tutor",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcdaresources",
+          "topic": "Helpful links & materials"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcac DISCUSSION",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcacgeneral",
+          "topic": "Off-topic chat"
+        },
+        {
+          "type": "text",
+          "name": "\u2753questions",
+          "topic": "Ask for help here",
+          "permission_overwrites": [
+            {
+              "role": "Student",
+              "allow": [
+                "send_messages",
+                "attach_files"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Tutor",
+              "allow": [
+                "send_messages",
+                "manage_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcddhomework-help",
+          "topic": "Get homework assistance"
+        },
+        {
+          "type": "text",
+          "name": "\ud83e\udd16bot-commands",
+          "topic": "Bot commands"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcd6 SUBJECTS",
+      "permission_overwrites": [
+        {
+          "role": "Student",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Tutor",
+          "allow": [
+            "read_messages",
+            "send_messages",
+            "manage_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udd22math",
+          "topic": "Mathematics discussion"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udd2cscience",
+          "topic": "Science discussion"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcbbcoding",
+          "topic": "Programming help"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcddenglish",
+          "topic": "English & writing"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd0a STUDY ROOMS",
+      "channels": [
+        {
+          "type": "voice",
+          "name": "\ud83d\udcda Study Room 1",
+          "bitrate": 64000,
+          "user_limit": 5
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udcda Study Room 2",
+          "bitrate": 64000,
+          "user_limit": 5
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udc65 Group Session",
+          "bitrate": 96000,
+          "user_limit": 10,
+          "permission_overwrites": [
+            {
+              "role": "Tutor",
+              "allow": [
+                "connect",
+                "speak",
+                "mute_members"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfb5 Lo-Fi Study",
+          "bitrate": 96000,
+          "user_limit": 0
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd12 STAFF",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Tutor",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udccbstaff-log",
+          "topic": "Staff logs"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcactutor-chat",
+          "topic": "Tutor discussions"
+        }
+      ]
+    }
+  ],
+  "auto_assign": "Student"
+}

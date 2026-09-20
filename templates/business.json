@@ -1,0 +1,305 @@
+{
+  "schema_version": "2.0",
+  "template_version": "1.0",
+  "server_name": null,
+  "roles": [
+    {
+      "name": "CEO",
+      "color": "gold",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Manager",
+      "color": "crimson",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "manage_channels",
+        "manage_messages",
+        "kick_members"
+      ]
+    },
+    {
+      "name": "Team Lead",
+      "color": "emerald",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "manage_messages"
+      ]
+    },
+    {
+      "name": "Employee",
+      "color": "blue",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "connect",
+        "speak"
+      ]
+    },
+    {
+      "name": "Intern",
+      "color": "grey",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "\ud83d\udccb COMPANY",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages"
+          ]
+        },
+        {
+          "role": "CEO",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Manager",
+          "allow": [
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcdcguidelines",
+          "topic": "Company rules & policies"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udce3announcements",
+          "topic": "Company announcements",
+          "permission_overwrites": [
+            {
+              "role": "CEO",
+              "allow": [
+                "send_messages",
+                "mention_everyone"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Manager",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\uddd3schedule",
+          "topic": "Meeting schedules"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcbc WORK",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcacgeneral-work",
+          "topic": "General work discussion"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udccbtasks",
+          "topic": "Task assignments & tracking",
+          "permission_overwrites": [
+            {
+              "role": "Team Lead",
+              "allow": [
+                "send_messages",
+                "manage_messages"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Employee",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Intern",
+              "allow": [
+                "read_messages"
+              ],
+              "deny": [
+                "send_messages"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcc8reports",
+          "topic": "Weekly reports"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udca1ideas",
+          "topic": "Brainstorming & ideas"
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfe2 DEPARTMENTS",
+      "permission_overwrites": [
+        {
+          "role": "Employee",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Team Lead",
+          "allow": [
+            "read_messages",
+            "send_messages",
+            "manage_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcbbdev-team",
+          "topic": "Development team"
+        },
+        {
+          "type": "text",
+          "name": "\ud83c\udfa8design-team",
+          "topic": "Design team"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udccamarketing",
+          "topic": "Marketing team"
+        },
+        {
+          "type": "text",
+          "name": "\ud83e\udd1dhr",
+          "topic": "Human resources"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd0a MEETINGS",
+      "channels": [
+        {
+          "type": "voice",
+          "name": "\ud83d\udcde Meeting Room 1",
+          "bitrate": 96000,
+          "user_limit": 10
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udcde Meeting Room 2",
+          "bitrate": 96000,
+          "user_limit": 10
+        },
+        {
+          "type": "voice",
+          "name": "\u2615 Break Room",
+          "bitrate": 64000,
+          "user_limit": 0,
+          "permission_overwrites": [
+            {
+              "role": "Employee",
+              "allow": [
+                "connect",
+                "speak"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Intern",
+              "allow": [
+                "connect",
+                "speak"
+              ],
+              "deny": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd12 MANAGEMENT",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Manager",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "CEO",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udccbmanagement-log",
+          "topic": "Management logs"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcacprivate-chat",
+          "topic": "Management only"
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udd12 Private Office",
+          "bitrate": 64000
+        }
+      ]
+    }
+  ],
+  "auto_assign": "Employee"
+}

@@ -1,0 +1,283 @@
+{
+  "schema_version": "2.0",
+  "template_version": "1.0",
+  "server_name": null,
+  "roles": [
+    {
+      "name": "Owner",
+      "color": "gold",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Admin",
+      "color": "crimson",
+      "hoist": true,
+      "mentionable": false,
+      "permissions": [
+        "administrator"
+      ]
+    },
+    {
+      "name": "Moderator",
+      "color": "emerald",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "kick_members",
+        "ban_members",
+        "manage_messages",
+        "manage_channels"
+      ]
+    },
+    {
+      "name": "Helper",
+      "color": "amber",
+      "hoist": true,
+      "mentionable": true,
+      "permissions": [
+        "manage_messages"
+      ]
+    },
+    {
+      "name": "Active Member",
+      "color": "magenta",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages",
+        "embed_links",
+        "attach_files"
+      ]
+    },
+    {
+      "name": "Member",
+      "color": "blue",
+      "hoist": false,
+      "mentionable": false,
+      "permissions": [
+        "send_messages",
+        "read_messages"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "\ud83d\udccb INFORMATION",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [
+            "read_messages"
+          ],
+          "deny": [
+            "send_messages"
+          ]
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcdcrules",
+          "topic": "Server rules"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udce3announcements",
+          "topic": "Important updates",
+          "permission_overwrites": [
+            {
+              "role": "Admin",
+              "allow": [
+                "send_messages",
+                "mention_everyone"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Moderator",
+              "allow": [
+                "send_messages"
+              ],
+              "deny": []
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcccroles-info",
+          "topic": "Get your roles here"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udc4bintroductions",
+          "topic": "Introduce yourself!"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcac COMMUNITY",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udcacgeneral",
+          "topic": "Main chat"
+        },
+        {
+          "type": "text",
+          "name": "\ud83e\udd16bot-cmds",
+          "topic": "Bot commands"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\uddbcmedia-share",
+          "topic": "Share media",
+          "permission_overwrites": [
+            {
+              "role": "Active Member",
+              "allow": [
+                "attach_files",
+                "embed_links"
+              ],
+              "deny": []
+            },
+            {
+              "role": "Member",
+              "allow": [
+                "read_messages"
+              ],
+              "deny": [
+                "attach_files"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udca1suggestions",
+          "topic": "Suggest improvements"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udccapolls",
+          "topic": "Community polls"
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfa8 CREATIVE",
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83c\udfa8art-gallery",
+          "topic": "Share your creations"
+        },
+        {
+          "type": "text",
+          "name": "\u270dwriting",
+          "topic": "Stories, poems, ideas"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcf8photography",
+          "topic": "Share your photos"
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd0a VOICE",
+      "channels": [
+        {
+          "type": "voice",
+          "name": "\ud83d\udd0a General Voice",
+          "bitrate": 96000,
+          "user_limit": 0
+        },
+        {
+          "type": "voice",
+          "name": "\ud83c\udfb5 Music",
+          "bitrate": 96000,
+          "user_limit": 0
+        },
+        {
+          "type": "voice",
+          "name": "\u2615 Chill Lounge",
+          "bitrate": 64000,
+          "user_limit": 10
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udcda Study Room",
+          "bitrate": 64000,
+          "user_limit": 5
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd12 STAFF AREA",
+      "permission_overwrites": [
+        {
+          "role": "@everyone",
+          "allow": [],
+          "deny": [
+            "read_messages"
+          ]
+        },
+        {
+          "role": "Moderator",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Admin",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        },
+        {
+          "role": "Helper",
+          "allow": [
+            "read_messages",
+            "send_messages"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "type": "text",
+          "name": "\ud83d\udccbmod-log",
+          "topic": "Moderation logs"
+        },
+        {
+          "type": "text",
+          "name": "\ud83d\udcacstaff-chat",
+          "topic": "Staff only"
+        },
+        {
+          "type": "voice",
+          "name": "\ud83d\udd12 Staff Voice",
+          "bitrate": 64000
+        }
+      ]
+    }
+  ],
+  "auto_assign": "Member"
+}
