@@ -154,4 +154,11 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("Bot execution terminated by user.")
+    except Exception as exc:
+        log.exception("Fatal bot execution error: %s", exc)
+        raise
+
