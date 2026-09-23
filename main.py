@@ -5,33 +5,14 @@ import datetime
 import logging
 import os
 import pathlib
-from threading import Thread
 
 import discord
 from discord.ext import commands
-from flask import Flask
 
 import config
 from services.database import get_database
 from services.view_registry import ViewRegistry
 from utils.logger import setup_logging
-
-# ── Keep-alive server for Render free tier ────────────────────────────────
-_keep_alive_app = Flask(__name__)
-
-
-@_keep_alive_app.route("/")
-def _health_check():
-    return "Bot is alive!", 200
-
-
-def _run_keep_alive():
-    port = int(os.environ.get("PORT", 8080))
-    _keep_alive_app.run(host="0.0.0.0", port=port, use_reloader=False)
-
-
-Thread(target=_run_keep_alive, daemon=True).start()
-# ─────────────────────────────────────────────────────────────────────────
 
 # ── Ensure data directories exist ────────────────────────────────────────
 _DATA_DIRS = [
