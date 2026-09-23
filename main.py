@@ -7,6 +7,7 @@ import os
 import pathlib
 
 import discord
+from aiohttp import web
 from discord.ext import commands
 
 import config
@@ -117,10 +118,39 @@ async def on_app_command_error(
             pass
 
 
+async def _start_health_server(host: str = "0.0.0.0", port: int | None = None) -> web.AppRunner:
+    """Minimal lightweight HTTP health/keep-alive server for Render Web Service."""
+    if port is None:
+        port = int(os.environ.get("PORT", 10000))
+
+    app = web.Application()
+
+    async def _health_check(request: web.Request) -> web.Response:
+        return web.Response(text="Damu Server Builder is alive")
+
+    app.router.add_get("/", _health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host=host, port=port)
+    await site.start()
+    log.info("Keep-alive HTTP server listening on %s:%d", host, port)
+    return runner
+
+
 async def main() -> None:
-    async with bot:
-        await asyncio.sleep(3)  # small delay before login
-        await bot.start(config.DISCORD_TOKEN)
+    runner: web.AppRunner | None = None
+    try:
+        runner = await _start_health_server()
+    except Exception as exc:
+        log.warning("Could not start keep-alive HTTP server: %s", exc)
+
+    try:
+        async with bot:
+            await asyncio.sleep(3)  # small delay before login
+            await bot.start(config.DISCORD_TOKEN)
+    finally:
+        if runner is not None:
+            await runner.cleanup()
 
 
 if __name__ == "__main__":
