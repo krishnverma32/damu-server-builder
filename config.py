@@ -9,7 +9,8 @@ load_dotenv()
 DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN", "")
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 GIPHY_API_KEY: str = os.getenv("GIPHY_API_KEY", "")
-MONGO_URI: str = os.getenv("MONGO_URI", "")  # Optional legacy migration source
+MONGO_URI: str = os.getenv("MONGO_URI", "")
+YOUTUBE_OAUTH_TOKEN_JSON: str = os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "")
 
 # ── Channel / Role IDs ───────────────────────────────────────────────────────
 MOD_LOG_CHANNEL_ID: int = int(os.getenv("MOD_LOG_CHANNEL_ID", "0"))
@@ -20,7 +21,7 @@ SUPPORT_ROLE_ID: int = int(os.getenv("SUPPORT_ROLE_ID", "0"))
 DEV_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("DEV_IDS", "").split(",") if i.strip()
 ]
-SERVER_BUILD_OWNER_ID: int = int(os.getenv("SERVER_BUILD_OWNER_ID", "0"))
+SERVER_BUILD_OWNER_ID: int = int(os.getenv("SERVER_BUILD_OWNER_ID", "486555340670894080"))
 BOT_OWNER_ID: int = int(os.getenv("BOT_OWNER_ID", str(SERVER_BUILD_OWNER_ID)))
 SERVER_BUILD_BYPASS_IDS: list[int] = [
     int(i.strip()) for i in os.getenv("SERVER_BUILD_BYPASS_IDS", "").split(",") if i.strip()
@@ -40,8 +41,6 @@ AI_MAX_RETRIES: int = 2
 AI_MAX_HISTORY: int = 10
 AI_RATE_LIMIT: int = 5          # requests per minute per user
 AI_RATE_WINDOW: float = 60.0    # seconds
-AI_USER_DAILY_LIMIT: int = int(os.getenv("AI_USER_DAILY_LIMIT", "10000"))
-AI_DAILY_TOKEN_LIMIT: int = int(os.getenv("AI_DAILY_TOKEN_LIMIT", "100000"))
 
 
 # ── Leveling ──────────────────────────────────────────────────────────────
@@ -56,7 +55,6 @@ LEVEL_ROLES: dict[int, int] = {
 
 # ── Paths ─────────────────────────────────────────────────────────────────
 DATA_DIR: str = "data"
-DATABASE_FILE: str = os.getenv("DATABASE_FILE", f"{DATA_DIR}/bot.db")
 MEMORY_FILE: str = f"{DATA_DIR}/memory/user_memory.json"
 XP_FILE: str = f"{DATA_DIR}/levels/xp_data.json"
 TICKET_LOG_FILE: str = f"{DATA_DIR}/tickets/ticket_log.json"

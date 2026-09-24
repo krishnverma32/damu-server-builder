@@ -20,9 +20,9 @@ class ColouredFormatter(logging.Formatter):
     """Formatter that prepends an ANSI colour code based on log level."""
 
     def format(self, record: logging.LogRecord) -> str:
-        formatted = super().format(record)
         colour = _COLOURS.get(record.levelno, _RESET)
-        return f"{colour}{formatted}{_RESET}"
+        record.msg = f"{colour}{record.msg}{_RESET}"
+        return super().format(record)
 
 
 def setup_logging() -> None:
@@ -60,14 +60,3 @@ def setup_logging() -> None:
     # Suppress noisy discord.py HTTP debug logs
     logging.getLogger("discord.http").setLevel(logging.WARNING)
     logging.getLogger("discord.gateway").setLevel(logging.WARNING)
-
-    def _handle_uncaught_exception(exc_type, exc_value, exc_traceback) -> None:
-        if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc_value, exc_traceback)
-            return
-        logging.getLogger("bot").critical(
-            "Uncaught exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_traceback)
-        )
-
-    sys.excepthook = _handle_uncaught_exception
-

@@ -5,15 +5,31 @@ import datetime
 import logging
 import os
 import pathlib
+from threading import Thread
 
 import discord
-from aiohttp import web
 from discord.ext import commands
+from flask import Flask
 
 import config
-from services.database import get_database
-from services.view_registry import ViewRegistry
 from utils.logger import setup_logging
+
+# ── Keep-alive server for Render free tier ────────────────────────────────
+_keep_alive_app = Flask(__name__)
+
+
+@_keep_alive_app.route("/")
+def _health_check():
+    return "Bot is alive!", 200
+
+
+def _run_keep_alive():
+    port = int(os.environ.get("PORT", 8080))
+    _keep_alive_app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+
+Thread(target=_run_keep_alive, daemon=True).start()
+# ─────────────────────────────────────────────────────────────────────────
 
 # ── Ensure data directories exist ────────────────────────────────────────
 _DATA_DIRS = [
@@ -30,10 +46,6 @@ for _d in _DATA_DIRS:
 # ── Logging ───────────────────────────────────────────────────────────────
 setup_logging()
 log = logging.getLogger("bot")
-
-if config.SERVER_BUILD_OWNER_ID == 0:
-    log.error("SERVER_BUILD_OWNER_ID must be set in .env before startup.")
-    raise RuntimeError("SERVER_BUILD_OWNER_ID must be set in .env")
 
 # ── Intents ───────────────────────────────────────────────────────────────
 intents = discord.Intents.default()
@@ -55,36 +67,27 @@ class ServerBot(commands.Bot):
             ),
         )
         self.start_time: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
-        self.failed_cogs: dict[str, str] = {}
-        self.db = get_database()
-        self.view_registry = ViewRegistry()
 
     async def setup_hook(self) -> None:
         """Load all cogs dynamically from the cogs/ directory."""
-        await self.db.create_tables()
-        log.info("SQLite database ready: %s", config.DATABASE_FILE)
-
         cog_dir = pathlib.Path("cogs")
         for cog_file in cog_dir.glob("*.py"):
-            if cog_file.name.startswith("_") or cog_file.name == "__init__.py":
+            if cog_file.name.startswith("_"):
                 continue
             ext = f"cogs.{cog_file.stem}"
             try:
                 await self.load_extension(ext)
-                self.failed_cogs.pop(ext, None)
                 log.info("Loaded cog: %s", ext)
             except Exception as exc:
-                self.failed_cogs[ext] = str(exc)
                 log.error("Failed to load cog %s: %s", ext, exc)
 
-        log.info("Loaded %d extensions. Use /sync to sync slash commands.", len(self.extensions))
+        # Sync application commands globally
+        synced = await self.tree.sync()
+        log.info("Synced %d slash commands globally.", len(synced))
 
     async def on_ready(self) -> None:
-        restored = await self.view_registry.restore_all(self)
         log.info("Logged in as %s (ID: %s)", self.user, self.user.id)  # type: ignore[union-attr]
         log.info("Guilds: %d | Latency: %.0fms", len(self.guilds), self.latency * 1000)
-        if restored:
-            log.info("Restored %d persistent view handlers.", restored)
 
 
 bot = ServerBot()
@@ -118,47 +121,11 @@ async def on_app_command_error(
             pass
 
 
-async def _start_health_server(host: str = "0.0.0.0", port: int | None = None) -> web.AppRunner:
-    """Minimal lightweight HTTP health/keep-alive server for Render Web Service."""
-    if port is None:
-        port = int(os.environ.get("PORT", 10000))
-
-    app = web.Application()
-
-    async def _health_check(request: web.Request) -> web.Response:
-        return web.Response(text="Damu Server Builder is alive")
-
-    app.router.add_get("/", _health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host=host, port=port)
-    await site.start()
-    log.info("Keep-alive HTTP server listening on %s:%d", host, port)
-    return runner
-
-
 async def main() -> None:
-    runner: web.AppRunner | None = None
-    try:
-        runner = await _start_health_server()
-    except Exception as exc:
-        log.warning("Could not start keep-alive HTTP server: %s", exc)
-
-    try:
-        async with bot:
-            await asyncio.sleep(3)  # small delay before login
-            await bot.start(config.DISCORD_TOKEN)
-    finally:
-        if runner is not None:
-            await runner.cleanup()
+    async with bot:
+        await asyncio.sleep(3)  # small delay before login
+        await bot.start(config.DISCORD_TOKEN)
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        log.info("Bot execution terminated by user.")
-    except Exception as exc:
-        log.exception("Fatal bot execution error: %s", exc)
-        raise
-
+    asyncio.run(main())

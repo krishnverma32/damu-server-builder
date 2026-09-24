@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import re
 from typing import Any
 
+import aiofiles
 import aiohttp
 
 import config
-from services.database import get_database
 
 log = logging.getLogger("services.ai")
 
@@ -385,35 +387,30 @@ _loaded: bool = False
 
 
 async def _ensure_loaded() -> None:
-    """Load memory from SQLite once."""
+    """Load memory from disk once."""
     global _memory, _loaded
     if _loaded:
         return
-    try:
-        db = get_database()
-        await db.create_tables()
-        keys = await db.list_keys("ai_memory")
-        _memory = {
-            key: await db.get("ai_memory", key, {"persona": "default", "history": []})
-            for key in keys
-        }
-    except Exception as exc:
-        log.warning("Could not load AI memory from SQLite: %s", exc)
-        _memory = {}
+    if os.path.exists(config.MEMORY_FILE):
+        try:
+            async with aiofiles.open(config.MEMORY_FILE, "r", encoding="utf-8") as f:
+                raw = await f.read()
+                _memory = json.loads(raw) if raw.strip() else {}
+        except Exception as exc:
+            log.warning("Could not load memory file: %s", exc)
+            _memory = {}
     _loaded = True
 
 
-async def _save_memory(key: str) -> None:
-    """Persist one memory entry to SQLite."""
-    db = get_database()
-    await db.set("ai_memory", key, _memory[key])
+async def _save_memory() -> None:
+    """Persist memory to disk."""
+    os.makedirs(os.path.dirname(config.MEMORY_FILE), exist_ok=True)
+    async with aiofiles.open(config.MEMORY_FILE, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(_memory, indent=2))
 
 
-def _user_key(user_id: int, guild_id: int | None = None) -> str:
-    """Return a memory key scoped to a guild or the DM namespace."""
-    if guild_id is None:
-        return f"dm:{user_id}"
-    return f"{guild_id}:{user_id}"
+def _user_key(user_id: int) -> str:
+    return str(user_id)
 
 
 def _detect_message_type(prompt: str) -> str:
@@ -562,19 +559,14 @@ def _validate_rukiya_response(
 
 
 async def get_ai_response(
-    prompt: str,
-    user_id: int,
-    guild_id: int | None = None,
-    persona: str = "default",
-    username: str | None = None,
-    return_usage: bool = False,
-) -> str | tuple[str, int]:
+    prompt: str, user_id: int, persona: str = "default", username: str | None = None
+) -> str:
     """Send *prompt* to OpenRouter and return the assistant reply.
 
-    Maintains per-guild per-user conversation history (max ``config.AI_MAX_HISTORY`` exchanges).
+    Maintains per-user conversation history (max ``config.AI_MAX_HISTORY`` exchanges).
     """
     await _ensure_loaded()
-    key = _user_key(user_id, guild_id)
+    key = _user_key(user_id)
 
     # Initialise user entry if missing
     if key not in _memory:
@@ -616,7 +608,6 @@ async def get_ai_response(
 
     reply: str = ""
     last_error: str = "Unknown error"
-    tokens_used = 0
 
     async with aiohttp.ClientSession() as session:
         for model in models_to_try:
@@ -631,13 +622,6 @@ async def get_ai_response(
                         if resp.status == 200:
                             choice = data.get("choices", [{}])[0]
                             reply = choice.get("message", {}).get("content", "")
-                            usage = data.get("usage") or {}
-                            tokens_used = int(
-                                usage.get("total_tokens")
-                                or usage.get("completion_tokens")
-                                or usage.get("prompt_tokens")
-                                or 0
-                            )
                             if reply:
                                 log.info("AI response from %s (%d tokens)", model, len(reply.split()))
                                 break
@@ -668,8 +652,7 @@ async def get_ai_response(
                 break
 
     if not reply:
-        error = f"\u26a0\ufe0f AI error: {last_error}"
-        return (error, 0) if return_usage else error
+        return f"\u26a0\ufe0f AI error: {last_error}"
 
     if active_persona == "rukiya":
         reply = _validate_rukiya_response(reply, message_type, user_data["history"])
@@ -680,25 +663,25 @@ async def get_ai_response(
     if len(user_data["history"]) > config.AI_MAX_HISTORY * 2:
         user_data["history"] = user_data["history"][-(config.AI_MAX_HISTORY * 2) :]
 
-    await _save_memory(key)
-    return (reply, tokens_used) if return_usage else reply
+    await _save_memory()
+    return reply
 
 
-async def reset_user_memory(user_id: int, guild_id: int | None = None) -> None:
+async def reset_user_memory(user_id: int) -> None:
     """Clear conversation history for a user."""
     await _ensure_loaded()
-    key = _user_key(user_id, guild_id)
+    key = _user_key(user_id)
     if key in _memory:
         _memory[key]["history"] = []
-        await _save_memory(key)
+        await _save_memory()
 
 
-async def set_user_persona(user_id: int, persona: str, guild_id: int | None = None) -> None:
+async def set_user_persona(user_id: int, persona: str) -> None:
     """Switch the active persona for a user."""
     await _ensure_loaded()
-    key = _user_key(user_id, guild_id)
+    key = _user_key(user_id)
     if key not in _memory:
         _memory[key] = {"persona": persona, "history": []}
     else:
         _memory[key]["persona"] = persona
-    await _save_memory(key)
+    await _save_memory()

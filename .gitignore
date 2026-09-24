@@ -1,41 +1,30 @@
-# Secrets
+# Environment secrets
 .env
-.env.*
-!.env.example
 
-# Python caches and builds
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
-*.pyd
-*.egg
 *.egg-info/
-build/
 dist/
+build/
+*.egg
 
-# Virtual environments
-.venv/
-venv/
-env/
+# Frontend
+node_modules/
+.next/
+out/
+artifacts/
 
-# Runtime bot data
-data/
-logs/
-*.log
-
-# Local tooling
-.coverage
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# IDE files
+# IDE
 .vscode/
 .idea/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Logs
+logs/
 
-# Legacy local config
+# Old local JSON config (now using MongoDB)
 ticket_config.json
+
+# Runtime data files (ephemeral on Render)
+data/

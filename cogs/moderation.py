@@ -16,12 +16,38 @@ from discord.ext import commands
 import config
 from services.embed_service import error_embed, success_embed, warning_embed
 from services.permission_service import bot_can_act, is_above
-from services.repositories import ModerationRepository
-from services.report_service import record_counter
 from utils.decorators import guild_only, mod_only
 from utils.helpers import parse_duration
 
 log = logging.getLogger("cogs.moderation")
+
+# ── Persistent warnings store ───────────────────────────────────────────────
+_warnings: dict[str, list[dict[str, Any]]] = {}
+_warnings_loaded: bool = False
+
+
+async def _load_warnings() -> None:
+    global _warnings, _warnings_loaded
+    if _warnings_loaded:
+        return
+    if os.path.exists(config.WARNINGS_FILE):
+        try:
+            async with aiofiles.open(config.WARNINGS_FILE, "r", encoding="utf-8") as f:
+                raw = await f.read()
+                _warnings = json.loads(raw) if raw.strip() else {}
+        except Exception:
+            _warnings = {}
+    _warnings_loaded = True
+
+
+async def _save_warnings() -> None:
+    os.makedirs(os.path.dirname(config.WARNINGS_FILE), exist_ok=True)
+    async with aiofiles.open(config.WARNINGS_FILE, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(_warnings, indent=2))
+
+
+def _warn_key(guild_id: int, user_id: int) -> str:
+    return f"{guild_id}_{user_id}"
 
 
 async def _mod_log(guild: discord.Guild, embed: discord.Embed) -> None:
@@ -48,7 +74,6 @@ class ModerationCog(commands.Cog, name="Moderation"):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.repo = ModerationRepository()
 
     # ── /kick ─────────────────────────────────────────────────────────────
     @app_commands.command(name="kick", description="Kick a member from the server.")
@@ -70,7 +95,6 @@ class ModerationCog(commands.Cog, name="Moderation"):
         await interaction.response.send_message(embed=em)
         log_em = warning_embed("Member Kicked", f"**{user}** by {interaction.user.mention}\nReason: {reason}")
         await _mod_log(interaction.guild, log_em)
-        await record_counter(interaction.guild.id, "moderation", "kicks")
 
     # ── /ban ──────────────────────────────────────────────────────────────
     @app_commands.command(name="ban", description="Ban a member from the server.")
@@ -94,7 +118,6 @@ class ModerationCog(commands.Cog, name="Moderation"):
         await interaction.response.send_message(embed=em)
         log_em = warning_embed("Member Banned", f"**{user}** by {interaction.user.mention}\nReason: {reason}")
         await _mod_log(interaction.guild, log_em)
-        await record_counter(interaction.guild.id, "moderation", "bans")
 
     # ── /unban ────────────────────────────────────────────────────────────
     @app_commands.command(name="unban", description="Unban a user by ID.")
@@ -140,7 +163,6 @@ class ModerationCog(commands.Cog, name="Moderation"):
         await interaction.response.send_message(embed=em)
         log_em = warning_embed("Member Muted", f"**{user}** by {interaction.user.mention} for {duration}\nReason: {reason}")
         await _mod_log(interaction.guild, log_em)
-        await record_counter(interaction.guild.id, "moderation", "mutes")
 
     # ── /unmute ───────────────────────────────────────────────────────────
     @app_commands.command(name="unmute", description="Remove timeout from a member.")
@@ -178,10 +200,18 @@ class ModerationCog(commands.Cog, name="Moderation"):
     @guild_only()
     async def warn(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided") -> None:
         assert interaction.guild is not None
-        await self.repo.add_warning(interaction.guild.id, user.id, interaction.user.id, reason)
-        warns = await self.repo.get_warnings(interaction.guild.id, user.id)
-        count = len(warns)
+        await _load_warnings()
+        k = _warn_key(interaction.guild.id, user.id)
+        if k not in _warnings:
+            _warnings[k] = []
+        _warnings[k].append({
+            "reason": reason,
+            "moderator": interaction.user.id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        await _save_warnings()
 
+        count = len(_warnings[k])
         dm_em = warning_embed("Warning", f"You received a warning in **{interaction.guild.name}**.\nReason: {reason}\nTotal warnings: {count}")
         await _dm_user(user, dm_em)
 
@@ -190,14 +220,12 @@ class ModerationCog(commands.Cog, name="Moderation"):
 
         log_em = warning_embed("Member Warned", f"**{user}** by {interaction.user.mention}\nReason: {reason}\nTotal: {count}")
         await _mod_log(interaction.guild, log_em)
-        await record_counter(interaction.guild.id, "moderation", "warns")
 
         # Auto-mute on 3rd warning
         if count >= 3 and count % 3 == 0:
             try:
                 td = parse_duration("1h")
                 await user.timeout(td, reason=f"Auto-mute: {count} warnings reached")
-                await record_counter(interaction.guild.id, "moderation", "mutes")
                 auto_em = warning_embed("Auto-Muted", f"**{user}** auto-muted for 1h after reaching {count} warnings.")
                 await interaction.followup.send(embed=auto_em)
             except Exception:
@@ -210,19 +238,15 @@ class ModerationCog(commands.Cog, name="Moderation"):
     @guild_only()
     async def warnings(self, interaction: discord.Interaction, user: discord.Member) -> None:
         assert interaction.guild is not None
-        warns = await self.repo.get_warnings(interaction.guild.id, user.id)
+        await _load_warnings()
+        k = _warn_key(interaction.guild.id, user.id)
+        warns = _warnings.get(k, [])
         if not warns:
             return await interaction.response.send_message(embed=success_embed("No Warnings", f"**{user}** has no warnings."), ephemeral=True)
 
         lines: list[str] = []
         for i, w in enumerate(warns, 1):
-            ts = w.get("created_at") or w.get("timestamp") or "2026-01-01T00:00:00"
-            try:
-                dt = datetime.fromisoformat(ts.replace(" ", "T"))
-                time_str = f"<t:{int(dt.timestamp())}:R>"
-            except Exception:
-                time_str = ts
-            lines.append(f"**{i}.** {w['reason']} \u2014 {time_str}")
+            lines.append(f"**{i}.** {w['reason']} \u2014 <t:{int(datetime.fromisoformat(w['timestamp']).timestamp())}:R>")
         em = warning_embed(f"Warnings for {user}", "\n".join(lines))
         await interaction.response.send_message(embed=em)
 
@@ -233,8 +257,11 @@ class ModerationCog(commands.Cog, name="Moderation"):
     @guild_only()
     async def clearwarnings(self, interaction: discord.Interaction, user: discord.Member) -> None:
         assert interaction.guild is not None
-        deleted = await self.repo.clear_warnings(interaction.guild.id, user.id)
-        em = success_embed("Cleared", f"Removed **{deleted}** warnings for **{user}**.")
+        await _load_warnings()
+        k = _warn_key(interaction.guild.id, user.id)
+        _warnings.pop(k, None)
+        await _save_warnings()
+        em = success_embed("Cleared", f"All warnings for **{user}** have been removed.")
         await interaction.response.send_message(embed=em)
 
     # ── /slowmode ─────────────────────────────────────────────────────────
