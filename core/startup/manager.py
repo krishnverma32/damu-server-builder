@@ -55,6 +55,8 @@ class StartupManager:
         self._last_error_category: str | None = None
         self._last_success_at: str | None = None
         self._next_retry_at: str | None = None
+        self._last_retry_delay: float | None = None
+        self._last_retry_source: str | None = None
         self._ready_event = asyncio.Event()
         self._listener_attached: bool = False
 
@@ -86,6 +88,8 @@ class StartupManager:
             last_error_category=self._last_error_category,
             last_success_at=self._last_success_at,
             next_retry_at=self._next_retry_at,
+            retry_delay_seconds=self._last_retry_delay,
+            retry_source=self._last_retry_source,
             uptime_seconds=uptime,
         )
         return status.to_dict()
@@ -185,19 +189,29 @@ class StartupManager:
                     # ── HTTP 429 / Cloudflare 1015 Rate Limited ────────────────
                     if classification.category == StartupErrorCategory.RATE_LIMITED:
                         self._state = StartupState.RATE_LIMITED
-                        delay = self._backoff.calculate_delay(
+                        delay_res = self._backoff.calculate_delay_details(
                             self._attempt, retry_after=classification.retry_after
                         )
+                        delay = delay_res.delay
+                        self._last_retry_delay = delay
+                        self._last_retry_source = delay_res.source
                         next_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
                         self._next_retry_at = next_time.isoformat()
 
-                        ra_str = f"{classification.retry_after:.2f}s" if classification.retry_after else "unavailable"
+                        ra_val = classification.retry_after
+                        if ra_val is not None:
+                            ra_str = str(int(ra_val)) if ra_val.is_integer() else f"{ra_val:.2f}"
+                        else:
+                            ra_str = "unavailable"
+                        delay_str = str(int(delay)) if delay.is_integer() else f"{delay:.2f}"
+
                         log.warning(
-                            "[STARTUP] state=RATE_LIMITED status=%s attempt=%d retry_after=%s delay=%.2fs cloudflare_1015=%s",
+                            "[STARTUP] state=RATE_LIMITED status=%s attempt=%d retry_after=%s delay=%s retry_source=%s cloudflare_1015=%s",
                             classification.status_code or 429,
                             self._attempt,
                             ra_str,
-                            delay,
+                            delay_str,
+                            delay_res.source,
                             classification.is_cloudflare_1015,
                         )
 
@@ -241,16 +255,20 @@ class StartupManager:
                     # ── Retryable Transient Network / DNS / Gateway Errors ────
                     elif classification.is_retryable:
                         self._state = StartupState.RECONNECTING
-                        delay = self._backoff.calculate_delay(self._attempt)
+                        delay_res = self._backoff.calculate_delay_details(self._attempt)
+                        delay = delay_res.delay
+                        self._last_retry_delay = delay
+                        self._last_retry_source = delay_res.source
                         next_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
                         self._next_retry_at = next_time.isoformat()
 
                         log.warning(
-                            "[STARTUP] state=RECONNECTING category=%s error=%s attempt=%d delay=%.2fs",
+                            "[STARTUP] state=RECONNECTING category=%s error=%s attempt=%d delay=%.2fs retry_source=%s",
                             classification.category.value,
                             classification.message,
                             self._attempt,
                             delay,
+                            delay_res.source,
                         )
 
                         await cleanup_bot_for_retry(self.bot)
@@ -288,6 +306,8 @@ class StartupManager:
             self._backoff.reset()
             self._last_success_at = datetime.now(timezone.utc).isoformat()
             self._next_retry_at = None
+            self._last_retry_delay = None
+            self._last_retry_source = None
             self._ready_event.set()
 
             duration = (datetime.now(timezone.utc) - self._start_time).total_seconds()

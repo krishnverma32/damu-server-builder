@@ -523,3 +523,235 @@ async def test_graceful_shutdown_execution():
     assert bot.is_closed() is True
     assert custom_cleaned is True
     assert coordinator.is_shutdown_requested is True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REQUIRED RETRY-AFTER TESTS 1 THROUGH 10 & PRODUCTION ACCEPTANCE TEST
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_req_1_retry_after_60():
+    """TEST 1: Retry-After = 60 -> delay = 60."""
+    backoff = StartupBackoff()
+    result = backoff.calculate_delay_details(1, retry_after=60)
+    assert result.delay == 60.0
+    assert result.source == "server_retry_after"
+
+
+def test_req_2_retry_after_600():
+    """TEST 2: Retry-After = 600 -> delay = 600."""
+    backoff = StartupBackoff()
+    result = backoff.calculate_delay_details(1, retry_after=600)
+    assert result.delay == 600.0
+    assert result.source == "server_retry_after"
+
+
+def test_req_3_retry_after_46765():
+    """TEST 3: Retry-After = 46765 -> delay = approximately 46765, NOT 600."""
+    backoff = StartupBackoff()
+    result = backoff.calculate_delay_details(1, retry_after=46765)
+    assert result.delay == 46765.0
+    assert result.delay != 600.0
+    assert result.source == "server_retry_after"
+
+
+def test_req_4_retry_after_86400():
+    """TEST 4: Retry-After = 86400 -> delay = 86400."""
+    backoff = StartupBackoff()
+    result = backoff.calculate_delay_details(1, retry_after=86400)
+    assert result.delay == 86400.0
+    assert result.source == "server_retry_after"
+
+
+def test_req_5_retry_after_172800_capped():
+    """TEST 5: Retry-After = 172800 -> delay = 86400 when STARTUP_MAX_SERVER_RETRY_AFTER = 86400."""
+    backoff = StartupBackoff(max_server_retry_after=86400.0)
+    result = backoff.calculate_delay_details(1, retry_after=172800)
+    assert result.delay == 86400.0
+    assert result.source == "server_retry_after"
+    assert result.bounded_retry_after == 86400.0
+
+
+def test_req_6_retry_after_missing():
+    """TEST 6: Retry-After missing -> exponential backoff + jitter."""
+    backoff = StartupBackoff(base_delay=5.0, max_delay=600.0, jitter_ratio=0.25)
+    result = backoff.calculate_delay_details(2, retry_after=None)
+    assert result.source == "exponential_backoff"
+    # Base 5.0 * 2^1 = 10.0, jitter +- 25% -> 7.5 to 12.5
+    assert 7.5 <= result.delay <= 12.5
+
+
+def test_req_7_retry_after_malformed():
+    """TEST 7: Retry-After malformed -> exponential backoff fallback."""
+    backoff = StartupBackoff(base_delay=5.0, max_delay=600.0, jitter_ratio=0.0)
+    result = backoff.calculate_delay_details(1, retry_after="malformed_header_value")
+    assert result.source == "exponential_backoff"
+    assert result.delay == 5.0
+
+
+def test_req_8_retry_after_negative():
+    """TEST 8: Retry-After negative -> exponential backoff fallback."""
+    backoff = StartupBackoff(base_delay=5.0, max_delay=600.0, jitter_ratio=0.0)
+    result = backoff.calculate_delay_details(1, retry_after=-120.0)
+    assert result.source == "exponential_backoff"
+    assert result.delay == 5.0
+
+
+@pytest.mark.anyio
+async def test_req_9_shutdown_during_long_retry_after():
+    """TEST 9: Shutdown during a long 46,765s Retry-After exits immediately and cleanly."""
+    bot = FakeBot()
+    backoff = StartupBackoff()
+    manager = StartupManager(bot, backoff=backoff, keep_alive_on_degraded=False)
+
+    async def fake_start(token: str):
+        err = make_discord_http_error(
+            429,
+            text="Cloudflare 1015 ban",
+            headers={"Retry-After": "46765"},
+        )
+        raise err
+
+    bot.start = fake_start
+
+    # Trigger shutdown after 50ms
+    async def trigger_shutdown_soon():
+        await asyncio.sleep(0.05)
+        manager.request_shutdown("Operator shutdown during Retry-After")
+
+    asyncio.create_task(trigger_shutdown_soon())
+
+    start_t = asyncio.get_event_loop().time()
+    await manager.run("MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.G_abcd.1234567890abcdef")
+    elapsed = asyncio.get_event_loop().time() - start_t
+
+    # Must exit within ~1-2 seconds, NOT waiting for 46,765 seconds
+    assert elapsed < 2.0
+    assert manager._coordinator.is_shutdown_requested is True
+    assert manager.state in (StartupState.STOPPING, StartupState.STOPPED)
+
+
+@pytest.mark.anyio
+async def test_req_10_429_followed_by_successful_login():
+    """TEST 10: 429 followed by successful login transitions:
+    RATE_LIMITED -> wait -> reconnect -> READY -> backoff reset.
+    """
+    bot = FakeBot()
+    backoff = StartupBackoff(base_delay=0.01, max_delay=0.1, jitter_ratio=0.0)
+    manager = StartupManager(bot, backoff=backoff, keep_alive_on_degraded=False)
+
+    states_seen: list[StartupState] = []
+    attempts = 0
+
+    async def fake_start(token: str):
+        nonlocal attempts
+        attempts += 1
+        states_seen.append(manager.state)
+        if attempts == 1:
+            err = make_discord_http_error(429, text="Rate limit", headers={"Retry-After": "0.01"})
+            raise err
+        # Attempt 2 connects successfully
+        await bot.trigger_ready()
+
+    bot.start = fake_start
+
+    await manager.run("MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.G_abcd.1234567890abcdef")
+
+    assert manager.state == StartupState.READY
+    assert manager.is_ready is True
+    assert attempts == 2
+    # Verify backoff was reset to initial base
+    assert backoff.calculate_delay(1) == 0.01
+
+    health = manager.get_health_status()
+    assert health["state"] == "READY"
+    assert health["discord_ready"] is True
+    assert health["next_retry_at"] is None
+    assert health["retry_delay_seconds"] is None
+    assert health["retry_source"] is None
+
+
+@pytest.mark.anyio
+async def test_production_acceptance_simulation(caplog):
+    """PRODUCTION ACCEPTANCE TEST:
+    Simulate:
+        HTTP 429
+        Retry-After = 46765
+        Cloudflare 1015 response
+
+    Expected log:
+        state=RATE_LIMITED
+        status=429
+        retry_after=46765
+        delay=46765
+        retry_source=server_retry_after
+
+    Process remains alive.
+    Health endpoint remains HTTP 200.
+    Status reports next_retry_at, retry_delay_seconds=46765, retry_source=server_retry_after.
+    """
+    bot = FakeBot()
+    backoff = StartupBackoff()
+    manager = StartupManager(bot, backoff=backoff, keep_alive_on_degraded=False)
+
+    call_count = 0
+
+    async def fake_start(token: str):
+        nonlocal call_count
+        call_count += 1
+        err = make_discord_http_error(
+            429,
+            text="error 1015 You are being rate limited. Cloudflare ban",
+            headers={"Retry-After": "46765"},
+        )
+        raise err
+
+    bot.start = fake_start
+
+    # Create health app
+    app = create_health_app(manager)
+    client = app.test_client()
+
+    # Capture log records
+    with caplog.at_level(logging.WARNING):
+        # Run manager in background task
+        run_task = asyncio.create_task(manager.run("MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.G_abcd.1234567890abcdef"))
+
+        # Wait briefly for attempt 1 to hit 429 and enter sleep
+        await asyncio.sleep(0.1)
+
+        # 1. State must be RATE_LIMITED
+        assert manager.state == StartupState.RATE_LIMITED
+        assert call_count == 1
+
+        # 2. Check health endpoint remains HTTP 200
+        resp_health = client.get("/health")
+        assert resp_health.status_code == 200
+        assert resp_health.json["status"] == "ok"
+        assert resp_health.json["process"] == "alive"
+        assert resp_health.json["startup_state"] == "RATE_LIMITED"
+
+        # 3. Check /status endpoint reports retry metadata
+        resp_status = client.get("/status")
+        assert resp_status.status_code == 200
+        status_data = resp_status.json
+        assert status_data["state"] == "RATE_LIMITED"
+        assert status_data["retry_source"] == "server_retry_after"
+        assert status_data["retry_delay_seconds"] == 46765
+        assert status_data["next_retry_at"] is not None
+
+        # 4. Verify no second login attempt was made (bot must NOT retry after 10m)
+        assert call_count == 1
+
+        # 5. Verify logs contain required fields
+        log_text = caplog.text
+        assert "state=RATE_LIMITED" in log_text
+        assert "status=429" in log_text
+        assert "retry_after=46765" in log_text
+        assert "delay=46765" in log_text
+        assert "retry_source=server_retry_after"
+
+        # 6. Shut down cleanly
+        manager.request_shutdown("Acceptance test shutdown")
+        await run_task
+

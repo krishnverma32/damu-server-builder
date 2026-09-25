@@ -41,6 +41,7 @@ class StartupStatus:
     uptime_seconds: float = 0.0
     is_cloudflare_1015: bool = False
     retry_delay_seconds: float | None = None
+    retry_source: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict[str, Any]:
@@ -53,5 +54,11 @@ class StartupStatus:
             "last_error_category": self.last_error_category,
             "last_success_at": self.last_success_at,
             "next_retry_at": self.next_retry_at,
+            "retry_delay_seconds": (
+                int(self.retry_delay_seconds)
+                if self.retry_delay_seconds is not None and self.retry_delay_seconds.is_integer()
+                else (round(self.retry_delay_seconds, 2) if self.retry_delay_seconds is not None else None)
+            ),
+            "retry_source": self.retry_source,
             "uptime_seconds": round(self.uptime_seconds, 2),
         }

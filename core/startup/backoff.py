@@ -1,8 +1,14 @@
-"""Exponential backoff calculation with jitter and sanitized Retry-After precedence."""
+"""Exponential backoff calculation and server Retry-After handler.
+
+Strictly separates:
+1. SERVER-PROVIDED RETRY-AFTER (capped by STARTUP_MAX_SERVER_RETRY_AFTER, default 24h)
+2. LOCALLY CALCULATED EXPONENTIAL BACKOFF (capped by STARTUP_MAX_BACKOFF, default 10m)
+"""
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import random
 from dataclasses import dataclass
@@ -11,7 +17,8 @@ log = logging.getLogger("core.startup.backoff")
 
 # Defaults for environment configurations
 DEFAULT_BASE_BACKOFF: float = 5.0
-DEFAULT_MAX_BACKOFF: float = 600.0  # 10 minutes
+DEFAULT_MAX_BACKOFF: float = 600.0  # 10 minutes (for local backoff)
+DEFAULT_MAX_SERVER_RETRY_AFTER: float = 86400.0  # 24 hours (for server Retry-After)
 DEFAULT_JITTER_RATIO: float = 0.25
 DEFAULT_MAX_ATTEMPTS: int = 0  # 0 = unlimited retries for transient failures
 DEFAULT_MAX_RETRY_WINDOW: float = 0.0  # 0 = unlimited window
@@ -40,11 +47,22 @@ def _get_int_env(var_name: str, default: int, min_val: int, max_val: int) -> int
 
 
 @dataclass
+class DelayResult:
+    """Detailed result of retry delay calculation."""
+
+    delay: float
+    source: str  # "server_retry_after" or "exponential_backoff"
+    raw_retry_after: float | None = None
+    bounded_retry_after: float | None = None
+
+
+@dataclass
 class StartupBackoff:
-    """Calculates retry delays with exponential growth, jitter, and Retry-After precedence."""
+    """Calculates retry delays, distinguishing server-supplied Retry-After from local backoff."""
 
     base_delay: float = DEFAULT_BASE_BACKOFF
     max_delay: float = DEFAULT_MAX_BACKOFF
+    max_server_retry_after: float = DEFAULT_MAX_SERVER_RETRY_AFTER
     jitter_ratio: float = DEFAULT_JITTER_RATIO
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     max_retry_window: float = DEFAULT_MAX_RETRY_WINDOW
@@ -56,6 +74,9 @@ class StartupBackoff:
         max_d = _get_float_env("STARTUP_MAX_BACKOFF", DEFAULT_MAX_BACKOFF, 10.0, 3600.0)
         if base > max_d:
             base = max_d
+        max_server_ra = _get_float_env(
+            "STARTUP_MAX_SERVER_RETRY_AFTER", DEFAULT_MAX_SERVER_RETRY_AFTER, 60.0, 604800.0
+        )
         jitter = _get_float_env("STARTUP_JITTER", DEFAULT_JITTER_RATIO, 0.0, 1.0)
         max_att = _get_int_env("STARTUP_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, 0, 1000)
         max_win = _get_float_env("STARTUP_MAX_RETRY_WINDOW", DEFAULT_MAX_RETRY_WINDOW, 0.0, 86400.0)
@@ -63,48 +84,70 @@ class StartupBackoff:
         return cls(
             base_delay=base,
             max_delay=max_d,
+            max_server_retry_after=max_server_ra,
             jitter_ratio=jitter,
             max_attempts=max_att,
             max_retry_window=max_win,
         )
 
-    def calculate_delay(self, attempt: int, retry_after: float | None = None) -> float:
-        """Calculate the next retry sleep duration.
+    def calculate_delay_details(self, attempt: int, retry_after: float | None = None) -> DelayResult:
+        """Calculate the next retry sleep duration with detailed source attribution.
 
-        Precedence Rule:
-        When Discord/Cloudflare supplies Retry-After, that value MUST take precedence
-        over normal exponential backoff.
+        Rule 1: Server-provided Retry-After uses STARTUP_MAX_SERVER_RETRY_AFTER (default 24h)
+                and is NOT capped to the local backoff limit (600s).
+        Rule 2: Local exponential backoff uses STARTUP_MAX_BACKOFF (default 10m).
         """
         attempt = max(1, attempt)
 
-        # ── 1. Retry-After Precedence ──────────────────────────────────────────
+        # ── 1. SERVER-PROVIDED RETRY-AFTER ────────────────────────────────────
         if retry_after is not None:
+            is_valid = False
+            raw_val: float = 0.0
             try:
-                sanitized_ra = float(retry_after)
-                if sanitized_ra > 0:
-                    # Sanitize: clamp between 1.0s and max_delay
-                    clamped_ra = min(self.max_delay, max(1.0, sanitized_ra))
-                    # Add small positive jitter (0.1s to 0.5s) to avoid synchronised thundering herd
-                    jitter = random.uniform(0.1, 0.5)
-                    final_delay = min(self.max_delay, clamped_ra + jitter)
+                raw_val = float(retry_after)
+                if not math.isnan(raw_val) and not math.isinf(raw_val) and raw_val >= 0:
+                    is_valid = True
+            except (ValueError, TypeError):
+                is_valid = False
+
+            if is_valid:
+                if raw_val <= self.max_server_retry_after:
+                    bounded = raw_val
+                    final_delay = bounded
                     log.info(
-                        "[STARTUP] Retry-After header honored: raw=%.2fs, sanitized=%.2fs, final_delay=%.2fs",
-                        sanitized_ra,
-                        clamped_ra,
+                        "[STARTUP] Server Retry-After received. raw=%.2fs bounded=%.2fs final_delay=%.2fs source=discord/cloudflare",
+                        raw_val,
+                        bounded,
                         final_delay,
                     )
-                    return final_delay
-            except (ValueError, TypeError):
-                log.warning("[STARTUP] Invalid Retry-After value received (%s). Falling back to backoff.", retry_after)
+                else:
+                    bounded = self.max_server_retry_after
+                    final_delay = bounded
+                    log.warning(
+                        "[STARTUP] Server Retry-After exceeded safety maximum. raw=%.2fs bounded=%.2fs source=server_retry_after reason=maximum_server_retry_after final_delay=%.2fs",
+                        raw_val,
+                        bounded,
+                        final_delay,
+                    )
 
-        # ── 2. Exponential Backoff with Jitter ────────────────────────────────
-        # attempt 1: base_delay * 2^0 = base_delay
-        # attempt 2: base_delay * 2^1 = 2 * base_delay
+                return DelayResult(
+                    delay=round(final_delay, 2),
+                    source="server_retry_after",
+                    raw_retry_after=raw_val,
+                    bounded_retry_after=bounded,
+                )
+            else:
+                log.warning(
+                    "[STARTUP] Invalid Retry-After: %s. Falling back to exponential backoff.",
+                    retry_after,
+                )
+
+        # ── 2. LOCALLY CALCULATED EXPONENTIAL BACKOFF ─────────────────────────
         exponent = min(10, attempt - 1)
         raw_backoff = self.base_delay * (2 ** exponent)
         clamped_backoff = min(self.max_delay, raw_backoff)
 
-        # Apply bounded random jitter (e.g. +/- jitter_ratio)
+        # Apply bounded random jitter
         floor = min(1.0, self.base_delay)
         if self.jitter_ratio > 0:
             jitter_delta = clamped_backoff * self.jitter_ratio * random.uniform(-1.0, 1.0)
@@ -112,7 +155,16 @@ class StartupBackoff:
         else:
             final_delay = max(floor, clamped_backoff)
 
-        return round(final_delay, 2)
+        return DelayResult(
+            delay=round(final_delay, 2),
+            source="exponential_backoff",
+            raw_retry_after=None,
+            bounded_retry_after=None,
+        )
+
+    def calculate_delay(self, attempt: int, retry_after: float | None = None) -> float:
+        """Calculate the next retry sleep duration float."""
+        return self.calculate_delay_details(attempt=attempt, retry_after=retry_after).delay
 
     def is_attempt_allowed(self, attempt: int) -> bool:
         """Check if additional retry attempts are permitted under max_attempts."""

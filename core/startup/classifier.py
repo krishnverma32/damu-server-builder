@@ -58,13 +58,15 @@ def _sanitize_message(raw_msg: str) -> str:
 
 
 def _extract_retry_after(exc: BaseException) -> float | None:
-    """Safely extract and sanitize Retry-After from exception or response headers."""
+    """Safely extract raw Retry-After numeric value from exception or response headers."""
+    import math
+
     # 1. Direct attribute on discord.RateLimited or discord.HTTPException
     val = getattr(exc, "retry_after", None)
     if val is not None:
         try:
             fval = float(val)
-            if 0 < fval <= 86400:
+            if not math.isnan(fval) and not math.isinf(fval):
                 return fval
         except (ValueError, TypeError):
             pass
@@ -77,7 +79,7 @@ def _extract_retry_after(exc: BaseException) -> float | None:
         if retry_hdr:
             try:
                 fval = float(retry_hdr)
-                if 0 < fval <= 86400:
+                if not math.isnan(fval) and not math.isinf(fval):
                     return fval
             except (ValueError, TypeError):
                 pass
