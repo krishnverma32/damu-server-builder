@@ -13,24 +13,25 @@ from discord.ext import commands
 from flask import Flask
 
 import config
+from core.startup import (
+    StartupManager,
+    StartupState,
+    create_health_app,
+    start_health_server,
+)
 from utils.logger import setup_logging
 
-# ── Keep-alive server for Render free tier ───────────────────────────────
-_keep_alive_app = Flask(__name__)
-
-
-@_keep_alive_app.route("/")
-@_keep_alive_app.route("/health")
-def _health_check():
-    return "Bot is alive!", 200
+# ── Keep-alive & readiness server for Render free tier ───────────────────
+_keep_alive_app = create_health_app()
 
 
 def _run_keep_alive():
     port = int(os.environ.get("PORT", 8080))
-    _keep_alive_app.run(host="0.0.0.0", port=port, use_reloader=False)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+    _keep_alive_app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
 
 
-Thread(target=_run_keep_alive, daemon=True).start()
+Thread(target=_run_keep_alive, daemon=True, name="damu-health-server").start()
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Ensure data directories exist ────────────────────────────────────────
@@ -96,6 +97,8 @@ class ServerBot(commands.Bot):
 
 
 bot = ServerBot()
+startup_manager = StartupManager(bot)
+_keep_alive_app.startup_manager = startup_manager  # type: ignore[attr-defined]
 
 
 @bot.tree.error
@@ -146,21 +149,24 @@ async def main() -> None:
         config.validate_discord_token(token)
     except RuntimeError as err:
         log.error("Startup validation failed: %s", err)
-        sys.exit(1)
+        if not startup_manager._keep_alive_on_degraded:
+            sys.exit(1)
+        return
 
-    async with bot:
-        try:
-            await bot.start(token)
-        except (discord.errors.LoginFailure, discord.errors.HTTPException) as exc:
-            if isinstance(exc, discord.errors.LoginFailure) or (
-                isinstance(exc, discord.errors.HTTPException) and getattr(exc, "status", None) == 401
-            ):
-                log.error(
-                    "Discord authentication failed (401). The configured Discord bot token was rejected by Discord. "
-                    "Verify that DISCORD_TOKEN contains the current Bot Token for this exact Discord application."
-                )
-                sys.exit(1)
-            raise
+    final_state = startup_manager.state
+    try:
+        await startup_manager.run(token)
+        final_state = startup_manager.state
+    except asyncio.CancelledError:
+        log.info("Main connection loop cancelled.")
+    finally:
+        await startup_manager.shutdown()
+
+    if (
+        final_state in (StartupState.INVALID_TOKEN, StartupState.FATAL_ERROR)
+        and not startup_manager._keep_alive_on_degraded
+    ):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

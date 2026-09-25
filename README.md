@@ -100,7 +100,20 @@ MEMORY / AUDIT (Structured Logs + Mod-Log Dispatch)
 - Ticket claiming, close confirmation dialogs, HTML transcript generation, auto-deletion timers, and blacklist management.
 - MongoDB Atlas persistence with an automatic, resilient in-memory fallback.
 
-### 9. Bot Health & Diagnostics (`engines/health/`)
+### 9. Startup & Rate-Limit Recovery Manager (`core/startup/`)
+- **Resilient Connection Lifecycle**: Replaces direct unhandled `bot.start()` with `StartupManager`. Eliminates Render restart loops caused by temporary Discord HTTP 429 / Cloudflare Error 1015 bans.
+- **Single Connection Guarantee (`lifecycle.py`)**: `ConnectionGuard` enforces an in-process lock preventing duplicate concurrent connection loops.
+- **Error Classification (`classifier.py`)**: Distinguishes rate limits (429), invalid tokens (401), permission errors (403), DNS errors, and gateway disconnects. 401 token errors never enter infinite retry loops.
+- **Exponential Backoff with Jitter (`backoff.py`)**: Honors `Retry-After` headers with precedence over exponential backoff, applying random jitter and bounded caps.
+- **Render Health & Readiness Separation (`health_server.py`)**:
+  - `GET /health`: Process health check. Always returns HTTP 200 while the process is alive (even during rate-limiting or reconnecting) to prevent Render restart storms.
+  - `GET /ready`: Discord connection readiness. Returns HTTP 200 when Discord is ready, and HTTP 503 when disconnected or recovering.
+  - `GET /status`: Diagnostic status payload (state, attempt, uptime) with zero secret exposure.
+
+> [!IMPORTANT]
+> **Render Deployment Health Check**: In your Render Dashboard (Service Settings &rarr; Health Check Path), configure the health check endpoint to **`/health`** (do NOT use `/ready` as the primary process health check, otherwise Render will terminate the container during transient Discord rate limits).
+
+### 10. Bot Health & Diagnostics (`engines/health/`)
 - `/damu_status`: Real-time operational overview (latency, API status, database, AI, active tasks, error counters).
 - `/damu_doctor`: Deep self-diagnostic inspecting bot permissions, database reachability, loaded cogs, persistent views, and storage.
 
@@ -202,6 +215,11 @@ python -m pytest tests/test_ai_fallback.py -v
 | `MONGO_URI` | Optional | MongoDB Atlas connection string for ticket and guild memory persistence. In-memory fallback is used if omitted. |
 | `OPENROUTER_API_KEY` | Optional | API key for AI server generation and conversational assistant. Deterministic rule fallback is used if omitted. |
 | `PORT` | Auto | Port for the keep-alive health server (defaults to `8080` locally, `10000` on Render). |
+| `STARTUP_BASE_BACKOFF` | Optional | Initial retry delay in seconds for transient rate limits (default: `5.0`). |
+| `STARTUP_MAX_BACKOFF` | Optional | Maximum retry delay cap in seconds (default: `600.0` / 10 minutes). |
+| `STARTUP_JITTER` | Optional | Bounded random jitter factor (default: `0.25`). |
+| `STARTUP_MAX_ATTEMPTS` | Optional | Maximum retry attempts (`0` for unlimited transient retries). |
+| `STARTUP_KEEP_ALIVE_ON_DEGRADED` | Optional | If `true` or running on Render, keeps process alive in degraded mode on fatal config errors. |
 | `BOT_PREFIX` | Optional | Prefix for legacy text commands (defaults to `!`). |
 | `MOD_LOG_CHANNEL_ID` | Optional | Channel ID for moderation audit logs. |
 | `TICKET_LOG_CHANNEL_ID`| Optional | Channel ID for ticket transcripts and audit logs. |
