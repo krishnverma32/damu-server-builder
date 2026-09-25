@@ -75,16 +75,6 @@ def test_flask_health_endpoints():
     assert resp_health.status_code == 200
     assert b"Bot is alive!" in resp_health.data
 
-    resp_terms = client.get("/terms.html")
-    assert resp_terms.status_code == 200
-    assert b"DAMU Server Builder" in resp_terms.data
-    assert b"Last Updated" in resp_terms.data
-
-    resp_privacy = client.get("/privacy.html")
-    assert resp_privacy.status_code == 200
-    assert b"DAMU Server Builder" in resp_privacy.data
-    assert b"Last Updated" in resp_privacy.data
-
 
 def test_main_startup_diagnostics_and_401(monkeypatch):
     import subprocess

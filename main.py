@@ -10,14 +10,12 @@ from threading import Thread
 
 import discord
 from discord.ext import commands
-from flask import Flask, send_from_directory
+from flask import Flask
 
 import config
 from utils.logger import setup_logging
 
-_ROOT_DIR = pathlib.Path(__file__).parent.resolve()
-
-# ── Keep-alive server for Render free tier & static legal pages ───────────
+# ── Keep-alive server for Render free tier ───────────────────────────────
 _keep_alive_app = Flask(__name__)
 
 
@@ -25,24 +23,6 @@ _keep_alive_app = Flask(__name__)
 @_keep_alive_app.route("/health")
 def _health_check():
     return "Bot is alive!", 200
-
-
-@_keep_alive_app.route("/terms.html")
-@_keep_alive_app.route("/terms")
-def _serve_terms():
-    terms_file = _ROOT_DIR / "terms.html"
-    if terms_file.exists():
-        return send_from_directory(_ROOT_DIR, "terms.html")
-    return "Terms of Service page not found.", 404
-
-
-@_keep_alive_app.route("/privacy.html")
-@_keep_alive_app.route("/privacy")
-def _serve_privacy():
-    privacy_file = _ROOT_DIR / "privacy.html"
-    if privacy_file.exists():
-        return send_from_directory(_ROOT_DIR, "privacy.html")
-    return "Privacy Policy page not found.", 404
 
 
 def _run_keep_alive():

@@ -13,12 +13,6 @@ build/
 *.egg
 .pytest_cache/
 
-# Frontend
-node_modules/
-.next/
-out/
-artifacts/
-
 # IDE
 .vscode/
 .idea/
