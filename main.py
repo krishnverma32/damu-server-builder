@@ -5,22 +5,44 @@ import datetime
 import logging
 import os
 import pathlib
+import sys
 from threading import Thread
 
 import discord
 from discord.ext import commands
-from flask import Flask
+from flask import Flask, send_from_directory
 
 import config
 from utils.logger import setup_logging
 
-# ── Keep-alive server for Render free tier ────────────────────────────────
+_ROOT_DIR = pathlib.Path(__file__).parent.resolve()
+
+# ── Keep-alive server for Render free tier & static legal pages ───────────
 _keep_alive_app = Flask(__name__)
 
 
 @_keep_alive_app.route("/")
+@_keep_alive_app.route("/health")
 def _health_check():
     return "Bot is alive!", 200
+
+
+@_keep_alive_app.route("/terms.html")
+@_keep_alive_app.route("/terms")
+def _serve_terms():
+    terms_file = _ROOT_DIR / "terms.html"
+    if terms_file.exists():
+        return send_from_directory(_ROOT_DIR, "terms.html")
+    return "Terms of Service page not found.", 404
+
+
+@_keep_alive_app.route("/privacy.html")
+@_keep_alive_app.route("/privacy")
+def _serve_privacy():
+    privacy_file = _ROOT_DIR / "privacy.html"
+    if privacy_file.exists():
+        return send_from_directory(_ROOT_DIR, "privacy.html")
+    return "Privacy Policy page not found.", 404
 
 
 def _run_keep_alive():
@@ -82,8 +104,11 @@ class ServerBot(commands.Bot):
                 log.error("Failed to load cog %s: %s", ext, exc)
 
         # Sync application commands globally
-        synced = await self.tree.sync()
-        log.info("Synced %d slash commands globally.", len(synced))
+        try:
+            synced = await self.tree.sync()
+            log.info("Synced %d slash commands globally.", len(synced))
+        except Exception as exc:
+            log.error("Failed to sync application commands: %s", exc)
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (ID: %s)", self.user, self.user.id)  # type: ignore[union-attr]
@@ -97,34 +122,65 @@ bot = ServerBot()
 async def on_app_command_error(
     interaction: discord.Interaction, error: discord.app_commands.AppCommandError
 ) -> None:
-    """Global slash-command error handler."""
+    """Centralized slash-command error handler for DAMU Core Engine."""
+    from core.errors import format_user_error
+    from core.interaction import safe_send
+    from engines.health.health_engine import health_engine
     from services.embed_service import error_embed
 
+    # Extract original underlying exception if wrapped in CommandInvokeError
+    orig = getattr(error, "original", error)
+    health_engine.record_error(f"{type(orig).__name__}: {orig}")
+
     if isinstance(error, discord.app_commands.CommandOnCooldown):
-        em = error_embed("Cooldown", f"Try again in **{error.retry_after:.1f}s**.")
-        await interaction.response.send_message(embed=em, ephemeral=True)
+        em = error_embed("Cooldown", f"Please wait **{error.retry_after:.1f}s** before reusing this command.")
+        await safe_send(interaction, embed=em, ephemeral=True)
     elif isinstance(error, discord.app_commands.MissingPermissions):
-        em = error_embed("Missing Permissions", "You lack the required permissions.")
-        await interaction.response.send_message(embed=em, ephemeral=True)
+        perms = ", ".join(f"`{p}`" for p in error.missing_permissions)
+        em = error_embed("Missing Permissions", f"You lack the required permissions: {perms}")
+        await safe_send(interaction, embed=em, ephemeral=True)
     elif isinstance(error, discord.app_commands.CheckFailure):
         em = error_embed("Check Failed", str(error) or "You cannot use this command.")
-        await interaction.response.send_message(embed=em, ephemeral=True)
+        await safe_send(interaction, embed=em, ephemeral=True)
     else:
-        log.exception("Unhandled app-command error: %s", error)
-        em = error_embed("Error", "An unexpected error occurred. Please try again later.")
-        try:
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=em, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=em, ephemeral=True)
-        except discord.HTTPException:
-            pass
+        log.exception("App command error for %s: %s", getattr(interaction.command, "name", "unknown"), orig)
+        cmd_name = getattr(interaction.command, "name", "action")
+        em = format_user_error(orig, operation_name=f"/{cmd_name}")
+        await safe_send(interaction, embed=em, ephemeral=True)
 
 
 async def main() -> None:
+    # ── Safe Diagnostics (No secret exposure) ────────────────────────────────
+    raw_env_token = os.getenv("DISCORD_TOKEN")
+    env_detected = "YES" if raw_env_token is not None else "NO"
+    has_length = "YES" if bool(raw_env_token and len(raw_env_token.strip()) > 0) else "NO"
+
+    log.info("DISCORD_TOKEN environment variable detected: %s", env_detected)
+    log.info("token length detected: %s", has_length)
+
+    # Normalize token before bot.start(): strip whitespace and matching quotes
+    token = config.normalize_token(raw_env_token)
+
+    # Validate token presence and check for common placeholder errors
+    try:
+        config.validate_discord_token(token)
+    except RuntimeError as err:
+        log.error("Startup validation failed: %s", err)
+        sys.exit(1)
+
     async with bot:
-        await asyncio.sleep(3)  # small delay before login
-        await bot.start(config.DISCORD_TOKEN)
+        try:
+            await bot.start(token)
+        except (discord.errors.LoginFailure, discord.errors.HTTPException) as exc:
+            if isinstance(exc, discord.errors.LoginFailure) or (
+                isinstance(exc, discord.errors.HTTPException) and getattr(exc, "status", None) == 401
+            ):
+                log.error(
+                    "Discord authentication failed (401). The configured Discord bot token was rejected by Discord. "
+                    "Verify that DISCORD_TOKEN contains the current Bot Token for this exact Discord application."
+                )
+                sys.exit(1)
+            raise
 
 
 if __name__ == "__main__":

@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — DAMU Server Builder</title>
+  <meta name="description" content="Privacy Policy for DAMU Server Builder Discord Application.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(88, 101, 242, 0.3);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --blurple: #5865F2;
+      --blurple-hover: #4752C4;
+      --blurple-light: #7983f5;
+      --accent-green: #10b981;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.65;
+      background-image:
+        radial-gradient(circle at 85% 15%, rgba(88, 101, 242, 0.12), transparent 40%),
+        radial-gradient(circle at 15% 75%, rgba(16, 185, 129, 0.08), transparent 45%);
+      background-attachment: fixed;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(11, 15, 25, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--blurple), #3c45a5);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.35);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 0.5rem 0.85rem;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-link.active {
+      color: var(--blurple-light);
+      background: rgba(88, 101, 242, 0.1);
+    }
+
+    .btn-github {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.45rem 0.95rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-github:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    main {
+      flex: 1;
+      max-width: 860px;
+      margin: 2.5rem auto 4rem;
+      padding: 0 1.5rem;
+      width: 100%;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.85rem;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 9999px;
+      color: #6ee7b7;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.025em;
+      margin-bottom: 1.25rem;
+    }
+
+    .hero-badge-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--accent-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    h1 {
+      font-size: 2.35rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 2rem;
+    }
+
+    .meta-box {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(17, 24, 39, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-bottom: 2.5rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .meta-item strong {
+      color: var(--text-main);
+    }
+
+    .legal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(8px);
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .sec-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: rgba(88, 101, 242, 0.2);
+      border: 1px solid var(--border-highlight);
+      color: var(--blurple-light);
+      border-radius: 50%;
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    p {
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      font-size: 0.98rem;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    ul, ol {
+      margin: 0.75rem 0 1.25rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.98rem;
+    }
+
+    li {
+      margin-bottom: 0.5rem;
+    }
+
+    li strong {
+      color: var(--text-main);
+    }
+
+    .data-table-wrapper {
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .highlight-box {
+      background: rgba(88, 101, 242, 0.08);
+      border-left: 3px solid var(--blurple);
+      padding: 1rem 1.25rem;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin: 1.25rem 0;
+      font-size: 0.925rem;
+      color: #cbd5e1;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      background: rgba(11, 15, 25, 0.95);
+      padding: 2.5rem 1.5rem;
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-top: auto;
+    }
+
+    .footer-content {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-main);
+    }
+
+    @media (max-width: 640px) {
+      h1 { font-size: 1.85rem; }
+      .legal-card { padding: 1.35rem; }
+      .nav-links { gap: 0.35rem; }
+      .nav-link { padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="privacy.html" class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </div>
+        <span>DAMU Server Builder</span>
+      </a>
+      <nav class="nav-links">
+        <a href="terms.html" class="nav-link">Terms of Service</a>
+        <a href="privacy.html" class="nav-link active">Privacy Policy</a>
+        <a href="https://github.com/krishnverma32/damu-server-builder" target="_blank" rel="noopener noreferrer" class="btn-github">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+          </svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      Privacy & Data Audit Complete
+    </div>
+    <h1>Privacy Policy</h1>
+    <p class="subtitle">This policy details the exact information processed, stored, and managed by DAMU Server Builder based on an audit of its source code.</p>
+
+    <div class="meta-box">
+      <div class="meta-item">Application: <strong>DAMU Server Builder</strong></div>
+      <div class="meta-item">Repository: <strong>krishnverma32/damu-server-builder</strong></div>
+      <div class="meta-item">Last Updated: <strong>September 24, 2026</strong></div>
+    </div>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">1</span> Overview & Privacy Commitment</h2>
+      <p>
+        <strong>DAMU Server Builder</strong> ("the Bot", "we", "our") values the privacy of Discord communities and individual users. We adhere to the principle of data minimization: we only collect and process data necessary to provide server creation, ticket management, moderation, verification, leveling, and AI assistance features.
+      </p>
+      <p>
+        This Privacy Policy explains what Discord data we access, how it is processed in code, where it is stored, how long it is retained, and how you can exercise your data rights.
+      </p>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">2</span> Information We Process From Discord</h2>
+      <p>When the Bot is added to a Discord server and commands are invoked, the application accesses specific Discord API objects:</p>
+
+      <div class="data-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data Element</th>
+              <th>How It Is Used in Code</th>
+              <th>Storage Mechanism</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Discord User ID & Username</strong></td>
+              <td>Associates moderation warnings, ticket ownership, blacklist status, XP progression, and AI chat memory.</td>
+              <td>Stored in MongoDB (ticket configs/blacklist) & local JSON files (XP, warnings, AI memory).</td>
+            </tr>
+            <tr>
+              <td><strong>Guild / Server IDs</strong></td>
+              <td>Identifies the server for configuration settings, analytics tracking, automod settings, and server-building schemas.</td>
+              <td>Stored in MongoDB (ticket guild configs) and local JSON files (analytics, automod, verification).</td>
+            </tr>
+            <tr>
+              <td><strong>Channel & Role IDs</strong></td>
+              <td>Configures log channels, welcome channels, ticket categories, verification roles, and autoroles.</td>
+              <td>Stored in MongoDB and local server configuration JSON files.</td>
+            </tr>
+            <tr>
+              <td><strong>Server Structure & Metadata</strong></td>
+              <td>Used during <code>/server_build</code> or <code>/server_inspect</code> to analyze and create channels, voice rooms, categories, and permission overwrites.</td>
+              <td>Processed in-memory; last applied schema optionally saved to local preview file for comparison.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">3</span> Message Content & Interaction Processing</h2>
+      <p>
+        The Bot operates with the <code>message_content</code> Discord intent enabled for specific, clearly defined functional operations:
+      </p>
+      <ul>
+        <li>
+          <strong>Server Analytics (cogs/analytics.py):</strong>
+          The Bot increments a numeric counter of messages sent per day per server. <em>Raw message content is NOT stored, logged, or recorded for analytics.</em>
+        </li>
+        <li>
+          <strong>Leveling & XP (cogs/leveling.py, services/level_service.py):</strong>
+          The Bot increments user message counts and awards XP on active chat channels. <em>Message text is NOT stored.</em>
+        </li>
+        <li>
+          <strong>AutoMod & Link/Spam Detection (cogs/automod.py):</strong>
+          Messages are evaluated in real-time for unauthorized invite links or rapid image flooding. When an offense occurs, the user ID and offense count are stored. <em>Message content is NOT saved after evaluation.</em>
+        </li>
+        <li>
+          <strong>AI Chat Assistant (cogs/ai.py, services/ai_service.py):</strong>
+          When a user invokes <code>/ai &lt;prompt&gt;</code>, the prompt and assistant response are held in memory for up to 10 conversation turns to provide conversational context. Users can immediately erase this history at any time using <code>/ai_reset</code>.
+        </li>
+        <li>
+          <strong>Support Ticket Transcripts (cogs/ticket_system.py, services/ticket_service.py):</strong>
+          When a ticket is closed, a transcript containing recent message history (timestamps, authors, text) from that specific ticket channel may be generated and delivered to the server's configured ticket log channel or transcript channel.
+        </li>
+      </ul>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">4</span> Data Storage & Database Architecture</h2>
+      <p>The application employs two storage layers depending on hosting configuration:</p>
+      <ul>
+        <li>
+          <strong>MongoDB Atlas:</strong>
+          When <code>MONGO_URI</code> is configured, the ticket system uses MongoDB Atlas (via the <code>motor</code> async driver) to store guild ticket settings (category ID, support role ID, ticket counter, blacklisted user IDs).
+        </li>
+        <li>
+          <strong>Local JSON Storage:</strong>
+          The application uses structured JSON files inside the <code>data/</code> directory for ephemeral and server settings:
+          <ul>
+            <li><code>data/dashboard_config.json</code> — Welcome messages, auto-roles, and command channels</li>
+            <li><code>data/verification_config.json</code> — Verification channel, role ID, and embed settings</li>
+            <li><code>data/automod/offenses.json</code> — Automod settings and user offense records</li>
+            <li><code>data/levels/xp_data.json</code> — User XP and levels</li>
+            <li><code>data/warnings.json</code> — Moderator-issued warnings with timestamps and reasons</li>
+            <li><code>data/memory/user_memory.json</code> — Per-user AI conversation context (max 10 exchanges)</li>
+          </ul>
+        </li>
+      </ul>
+      <div class="highlight-box">
+        Note: On ephemeral cloud hosting (such as Render instances without persistent disks), local data files reset across container redeployments, whereas MongoDB persists server settings.
+      </div>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">5</span> Third-Party Service Providers</h2>
+      <p>To deliver specific features, data is transmitted to trusted third-party providers:</p>
+      <ul>
+        <li>
+          <strong>Discord API:</strong> Delivers all messages, command responses, and guild interactions under <a href="https://discord.com/privacy" target="_blank" rel="noopener noreferrer" style="color: var(--blurple-light);">Discord's Privacy Policy</a>.
+        </li>
+        <li>
+          <strong>OpenRouter:</strong> When <code>/ai</code> is used, prompts and context history are securely transmitted via HTTPS to OpenRouter (<a href="https://openrouter.ai/privacy" target="_blank" rel="noopener noreferrer" style="color: var(--blurple-light);">OpenRouter Privacy Policy</a>) to generate responses using selected models (e.g., NVIDIA Nemotron, Gemma, Arcee MoE).
+        </li>
+        <li>
+          <strong>GIPHY API:</strong> If enabled for welcome embeds, queries (e.g., "welcome discord") are sent to GIPHY to retrieve animated GIF URLs. No personal user data is sent.
+        </li>
+        <li>
+          <strong>MongoDB Atlas:</strong> Hosts persistent guild configurations for the ticket management module.
+        </li>
+        <li>
+          <strong>Render:</strong> Cloud container hosting provider executing the bot runtime and keep-alive health server.
+        </li>
+      </ul>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">6</span> Data Retention & Automated Deletion</h2>
+      <p>We enforce explicit retention limits and automated cleanup:</p>
+      <ul>
+        <li><strong>AutoMod Offenses:</strong> Offense counters automatically expire and reset after <strong>24 hours</strong>.</li>
+        <li><strong>Closed Tickets:</strong> Closed ticket channels are automatically deleted after a <strong>10-second</strong> grace period.</li>
+        <li><strong>AI Memory:</strong> Retains a sliding window of at most <strong>10 exchanges</strong>. Users can trigger immediate erasure at any time via <code>/ai_reset</code>.</li>
+        <li><strong>Server Configuration:</strong> Maintained while the bot is an active member of the guild, or until cleared by administrators.</li>
+      </ul>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">7</span> Security Standards</h2>
+      <p>
+        We take security seriously. All credentials (including <code>DISCORD_TOKEN</code>, <code>MONGO_URI</code>, and <code>OPENROUTER_API_KEY</code>) are managed exclusively through secure environment variables and are never hardcoded into source code or exposed in web responses.
+      </p>
+      <p>
+        The built-in Flask web server serves only health checks and these static legal documents. It never displays tokens, server IDs, or stored data.
+      </p>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">8</span> User Rights & Data Deletion Requests</h2>
+      <p>Users and server administrators have the right to request access to or deletion of data associated with their Discord account or server:</p>
+      <ul>
+        <li><strong>Self-Service AI Data Deletion:</strong> Run <code>/ai_reset</code> in any channel where the bot is present to immediately wipe your conversation context.</li>
+        <li><strong>Guild Data Deletion:</strong> Removing the bot from your server halts all data processing. To request manual removal of stored guild configurations, ticket logs, or warning records from MongoDB/local storage, please open a request on our repository.</li>
+      </ul>
+    </section>
+
+    <section class="legal-card">
+      <h2><span class="sec-num">9</span> Contact & Inquiries</h2>
+      <p>
+        For questions regarding this Privacy Policy, data handling inquiries, or data deletion requests, please contact the developer via:
+      </p>
+      <p>
+        <strong>GitHub Repository:</strong> <a href="https://github.com/krishnverma32/damu-server-builder/issues" target="_blank" rel="noopener noreferrer" style="color: var(--blurple-light);">krishnverma32/damu-server-builder/issues</a>
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-content">
+      <div>&copy; 2026 DAMU Server Builder. All rights reserved.</div>
+      <div class="footer-links">
+        <a href="terms.html">Terms of Service</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="https://github.com/krishnverma32/damu-server-builder" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
