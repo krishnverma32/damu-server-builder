@@ -14,6 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from core.interaction import safe_defer, safe_followup, safe_send
 from services.embed_service import error_embed, info_embed, success_embed, warning_embed
 
 log = logging.getLogger("cogs.verification")
@@ -62,7 +63,8 @@ class VerificationView(discord.ui.View):
     async def verify(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         cog = interaction.client.get_cog("Verification")
         if not isinstance(cog, VerificationCog):
-            await interaction.response.send_message(
+            await safe_send(
+                interaction,
                 "Verification is not ready yet. Please try again in a moment.",
                 ephemeral=True,
             )
@@ -365,25 +367,26 @@ class VerificationCog(commands.Cog, name="Verification"):
 
     async def handle_verify(self, interaction: discord.Interaction) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message("Use this inside a server.", ephemeral=True)
+            await safe_send(interaction, "Use this inside a server.", ephemeral=True)
             return
 
         guild = interaction.guild
         member = interaction.user
         if member.bot:
-            await interaction.response.send_message("Bots cannot verify through this panel.", ephemeral=True)
+            await safe_send(interaction, "Bots cannot verify through this panel.", ephemeral=True)
             return
 
         guild_config = self._guild_config(guild.id)
         if not guild_config.get("enabled"):
-            await interaction.response.send_message("Verification is not enabled.", ephemeral=True)
+            await safe_send(interaction, "Verification is not enabled.", ephemeral=True)
             return
 
         now = time.monotonic()
         key = (guild.id, member.id)
         retry_at = self._cooldowns.get(key, 0)
         if retry_at > now:
-            await interaction.response.send_message(
+            await safe_send(
+                interaction,
                 f"Please wait **{retry_at - now:.1f}s** before trying again.",
                 ephemeral=True,
             )
@@ -393,7 +396,8 @@ class VerificationCog(commands.Cog, name="Verification"):
         verified_role = guild.get_role(int(guild_config.get("verified_role_id", 0) or 0))
         unverified_role = guild.get_role(int(guild_config.get("unverified_role_id", 0) or 0))
         if not verified_role or not unverified_role:
-            await interaction.response.send_message(
+            await safe_send(
+                interaction,
                 "Verification roles are missing. Please contact staff.",
                 ephemeral=True,
             )
@@ -406,14 +410,15 @@ class VerificationCog(commands.Cog, name="Verification"):
             return
 
         if verified_role in member.roles:
-            await interaction.response.send_message("You are already verified.", ephemeral=True)
+            await safe_send(interaction, "You are already verified.", ephemeral=True)
             return
 
         if guild_config.get("account_age_check"):
             min_days = int(guild_config.get("min_account_age_days", DEFAULT_ACCOUNT_AGE_DAYS) or 0)
             account_age = datetime.datetime.now(datetime.timezone.utc) - member.created_at
             if account_age.days < min_days:
-                await interaction.response.send_message(
+                await safe_send(
+                    interaction,
                     f"Your account must be at least **{min_days} days** old to verify.",
                     ephemeral=True,
                 )
@@ -430,7 +435,8 @@ class VerificationCog(commands.Cog, name="Verification"):
             if unverified_role in member.roles:
                 await member.remove_roles(unverified_role, reason="Member verified")
         except discord.Forbidden:
-            await interaction.response.send_message(
+            await safe_send(
+                interaction,
                 "I cannot update your roles. Staff must move my bot role higher.",
                 ephemeral=True,
             )
@@ -442,7 +448,8 @@ class VerificationCog(commands.Cog, name="Verification"):
             )
             return
         except discord.HTTPException:
-            await interaction.response.send_message(
+            await safe_send(
+                interaction,
                 "Verification failed because Discord rejected the role update. Try again shortly.",
                 ephemeral=True,
             )
@@ -454,7 +461,8 @@ class VerificationCog(commands.Cog, name="Verification"):
             )
             return
 
-        await interaction.response.send_message(
+        await safe_send(
+            interaction,
             "✅ Verified successfully. The server is unlocked for you now.",
             ephemeral=True,
         )

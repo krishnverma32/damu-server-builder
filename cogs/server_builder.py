@@ -12,6 +12,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from core.interaction import safe_defer, safe_edit, safe_followup, safe_send
 from services import ai_service
 from services.embed_service import error_embed, info_embed, success_embed
 from services.json_builder import _resolve_permissions, _style_text, build_server
@@ -35,7 +36,8 @@ class BuildConfirmView(discord.ui.View):
         if interaction.user.id == self.user_id:
             return True
 
-        await interaction.response.send_message(
+        await safe_send(
+            interaction,
             "Only the person who started this setup can confirm it.",
             ephemeral=True,
         )
@@ -50,7 +52,7 @@ class BuildConfirmView(discord.ui.View):
         self.confirmed = True
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(view=self)
+        await safe_edit(interaction, view=self)
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
@@ -62,7 +64,7 @@ class BuildConfirmView(discord.ui.View):
         self.confirmed = False
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(view=self)
+        await safe_edit(interaction, view=self)
         self.stop()
 
 
@@ -78,7 +80,8 @@ class BuildApprovalView(discord.ui.View):
         if interaction.user.id == self.owner_id:
             return True
 
-        await interaction.response.send_message(
+        await safe_send(
+            interaction,
             "Only the configured build owner can answer this request.",
             ephemeral=True,
         )
@@ -93,7 +96,8 @@ class BuildApprovalView(discord.ui.View):
         self.approved = True
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(
+        await safe_edit(
+            interaction,
             content="Approved. The requester can continue.",
             view=self,
         )
@@ -108,7 +112,8 @@ class BuildApprovalView(discord.ui.View):
         self.approved = False
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(
+        await safe_edit(
+            interaction,
             content="Denied. The server build will not run.",
             view=self,
         )
@@ -145,7 +150,8 @@ class JsonPasteModal(discord.ui.Modal, title="Paste Server JSON"):
         try:
             schema = self.cog._parse_server_schema(str(self.json_text))
         except ValueError as exc:
-            return await interaction.response.send_message(
+            return await safe_send(
+                interaction,
                 embed=error_embed("Invalid JSON", str(exc)),
                 ephemeral=True,
             )
