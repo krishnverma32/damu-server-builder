@@ -42,6 +42,7 @@ class ConfigManager:
         self.db: Any = None
         self.col: Any = None
         self._memory_cache: dict[str, dict] = {}
+        self._cache: dict[str, dict] = self._memory_cache
 
         if self.uri:
             try:
@@ -87,6 +88,7 @@ class ConfigManager:
                 )
             except Exception as exc:
                 log.warning("Failed to save guild config to MongoDB: %s", exc)
+        return True
 
     async def get_key(self, guild_id: int, key: str, default=None):
         doc = await self.get_guild(guild_id)
@@ -641,6 +643,16 @@ class TicketSystem(commands.Cog):
         if ticket_image_url:
             panel_embed.set_image(url=ticket_image_url)
 
+        from core.discord_api.guard import api_guard
+        allowed, api_state, _ = api_guard.can_execute()
+        if not allowed:
+            await safe_followup(
+                interaction,
+                f"Discord API is currently {api_state.value}. Cannot set up tickets right now.",
+                ephemeral=True,
+            )
+            return
+
         # Send panel
         panel_view = TicketPanelView()
         panel_msg = await interaction.channel.send(embed=panel_embed, view=panel_view)  # type: ignore[union-attr]
@@ -679,9 +691,13 @@ class TicketSystem(commands.Cog):
         assert interaction.guild is not None
 
         # 1. IMMEDIATE ACKNOWLEDGEMENT FIRST — BEFORE ANY ASYNC CALLS OR DB ACCESS!
-        acknowledged = await safe_defer(interaction, ephemeral=True)
-        if not acknowledged:
-            log.warning("Could not defer interaction for ticket creation; proceeding via channel fallback.")
+        defer_res = await safe_defer(interaction, ephemeral=True)
+        if not defer_res:
+            log.warning(
+                "[TICKET] action=create result=ABORTED reason=%s",
+                getattr(defer_res, "reason", "DEFER_FAILED"),
+            )
+            return
 
         # 2. LOAD CONFIG
         config_data = await self.config_manager.get_guild(interaction.guild.id)
@@ -781,13 +797,22 @@ class TicketSystem(commands.Cog):
                 "category": category,
                 "topic": f"Ticket opened by {interaction.user} ({ticket_type})",
             }
-            # Create text channel directly with calculated overwrites
-            ticket_channel = await interaction.guild.create_text_channel(
+            # Create text channel via ChannelEngine with calculated overwrites
+            ticket_channel = await ChannelEngine.create_text_channel(
+                guild=interaction.guild,
                 name=ticket_id,
                 category=category,
                 overwrites=overwrites,
+                topic=f"Ticket opened by {interaction.user} ({ticket_type})",
                 reason=f"Ticket opened by {interaction.user} ({ticket_type})",
             )
+            if not ticket_channel:
+                await safe_followup(
+                    interaction,
+                    "❌ Failed to create ticket channel. Discord API may be restricted.",
+                    ephemeral=True,
+                )
+                return
         except discord.Forbidden:
             log.error("Bot lacks permission to create ticket channel in guild %s", interaction.guild.id)
             await safe_followup(
@@ -805,64 +830,82 @@ class TicketSystem(commands.Cog):
             )
             return
 
-        # 9. SEND CONTROL PANEL
-        ticket_embed = discord.Embed(
-            title=f"Ticket #{counter:04d}",
-            color=EMBED_COLOR,
-            timestamp=discord.utils.utcnow(),
-        )
-        ticket_embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        ticket_image_url = config_data.get("ticket_image_url")
-        if ticket_image_url:
-            ticket_embed.set_image(url=ticket_image_url)
-        ticket_embed.add_field(name="Opened by", value=interaction.user.mention, inline=True)
-        ticket_embed.add_field(name="Ticket Type", value=ticket_type, inline=True)
-        ticket_embed.add_field(
-            name="Opened at",
-            value=discord.utils.format_dt(discord.utils.utcnow(), style="F"),
-            inline=True,
-        )
-        ticket_embed.set_footer(text="Use the buttons below to manage this ticket.")
-
-        mention_parts: list[str] = []
-        if support_role:
-            mention_parts.append(support_role.mention)
-        if mod_role:
-            mention_parts.append(mod_role.mention)
-        mention_text = " ".join(mention_parts) + " — a new ticket has been opened." if mention_parts else "A new ticket has been opened."
-
-        control_view = TicketControlView()
-        control_msg = await ticket_channel.send(
-            content=mention_text,
-            embed=ticket_embed,
-            view=control_view,
-        )
-
-        # 10. PERSIST STATE
-        control_messages: dict = config_data.get("control_messages", {})
-        control_messages[str(ticket_channel.id)] = control_msg.id
-        config_data["control_messages"] = control_messages
-        open_tickets[user_id_str] = ticket_channel.id
-        config_data["open_tickets"] = open_tickets
-        config_data["ticket_counter"] = counter
-        await self.config_manager.save_guild(interaction.guild.id, config_data)
-
-        self.ticket_cooldowns[interaction.user.id] = datetime.now(timezone.utc)
-        log.info("Ticket %s created by %s in guild %s", ticket_id, interaction.user, interaction.guild.id)
-
-        # 11. RESPOND TO USER
-        await safe_followup(
-            interaction,
-            f"Your ticket has been created: {ticket_channel.mention}",
-            ephemeral=True,
-        )
-
-        # 12. NOTIFY STAFF (Asynchronous, non-blocking)
-        asyncio.create_task(
-            self.notify_staff(
-                interaction.guild, ticket_channel, interaction.user, ticket_type, config_data
+        # 9. SEND CONTROL PANEL & PERSIST (TRANSACTIONAL WITH ROLLBACK)
+        try:
+            ticket_embed = discord.Embed(
+                title=f"Ticket #{counter:04d}",
+                color=EMBED_COLOR,
+                timestamp=discord.utils.utcnow(),
             )
-        )
+            ticket_embed.set_thumbnail(url=interaction.user.display_avatar.url)
+            ticket_image_url = config_data.get("ticket_image_url")
+            if ticket_image_url:
+                ticket_embed.set_image(url=ticket_image_url)
+            ticket_embed.add_field(name="Opened by", value=interaction.user.mention, inline=True)
+            ticket_embed.add_field(name="Ticket Type", value=ticket_type, inline=True)
+            ticket_embed.add_field(
+                name="Opened at",
+                value=discord.utils.format_dt(discord.utils.utcnow(), style="F"),
+                inline=True,
+            )
+            ticket_embed.set_footer(text="Use the buttons below to manage this ticket.")
+
+            mention_parts: list[str] = []
+            if support_role and getattr(support_role, "mention", None):
+                mention_parts.append(str(support_role.mention))
+            if mod_role and getattr(mod_role, "mention", None):
+                mention_parts.append(str(mod_role.mention))
+            mention_text = " ".join(mention_parts) + " — a new ticket has been opened." if mention_parts else "A new ticket has been opened."
+
+            control_view = TicketControlView()
+            control_msg = await ticket_channel.send(
+                content=mention_text,
+                embed=ticket_embed,
+                view=control_view,
+            )
+
+            # 10. PERSIST STATE
+            control_messages: dict = config_data.get("control_messages", {})
+            control_messages[str(ticket_channel.id)] = control_msg.id
+            config_data["control_messages"] = control_messages
+            open_tickets[user_id_str] = ticket_channel.id
+            config_data["open_tickets"] = open_tickets
+            config_data["ticket_counter"] = counter
+            await self.config_manager.save_guild(interaction.guild.id, config_data)
+
+            self.ticket_cooldowns[interaction.user.id] = datetime.now(timezone.utc)
+            log.info("Ticket %s created by %s in guild %s", ticket_id, interaction.user, interaction.guild.id)
+
+            # 11. RESPOND TO USER
+            await safe_followup(
+                interaction,
+                f"Your ticket has been created: {ticket_channel.mention}",
+                ephemeral=True,
+            )
+
+            # 12. NOTIFY STAFF (Asynchronous, non-blocking)
+            asyncio.create_task(
+                self.notify_staff(
+                    interaction.guild, ticket_channel, interaction.user, ticket_type, config_data
+                )
+            )
+        except Exception as exc:
+            # ── ROLLBACK ON FAILURE ───────────────────────────────────────────
+            log.exception("[TICKET] Transaction failed during setup. Rolling back created channel %s: %s", ticket_id, exc)
+            await ChannelEngine.delete_channel_safe(
+                ticket_channel,
+                reason="Ticket transaction rollback due to initialization error",
+            )
+            # Revert in-memory state
+            open_tickets.pop(user_id_str, None)
+            config_data["open_tickets"] = open_tickets
+            await self.config_manager.save_guild(interaction.guild.id, config_data)
+
+            await safe_send(
+                interaction,
+                content="An error occurred while initializing your ticket. Creation was safely rolled back.",
+                ephemeral=True,
+            )
 
     # ── Staff Notification ─────────────────────────────────────────────────────
     async def notify_staff(

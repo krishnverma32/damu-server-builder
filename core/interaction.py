@@ -1,21 +1,64 @@
 """Interaction Safety Layer — Guarantees safe interaction acknowledgements and lifecycle handling.
 
 Eliminates Discord 10062 'Unknown interaction' errors by strictly enforcing acknowledgement
-order and handling timeouts and response states gracefully.
+order and handling timeouts and response states gracefully. Coordinated with DiscordAPIGuard.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Sequence
+from enum import Enum
+from typing import Any, Optional, Sequence
 
 import discord
+
+from core.discord_api.guard import api_guard
+from core.discord_api.state import APIState
 
 log = logging.getLogger("core.interaction")
 
 # Discord interaction response deadline is 3 seconds; token lifecycle is 15 minutes.
 MAX_INTERACTION_AGE_SECONDS = 900.0  # 15 minutes
+
+
+class InteractionResultReason(str, Enum):
+    """Detailed reason for an interaction operation outcome."""
+
+    SUCCESS = "SUCCESS"
+    ALREADY_RESPONDED = "ALREADY_RESPONDED"
+    INTERACTION_EXPIRED = "INTERACTION_EXPIRED"
+    UNKNOWN_INTERACTION = "UNKNOWN_INTERACTION"
+    RATE_LIMITED = "RATE_LIMITED"
+    CLOUDFLARE_BLOCKED = "CLOUDFLARE_BLOCKED"
+    FORBIDDEN = "FORBIDDEN"
+    NOT_FOUND = "NOT_FOUND"
+    OTHER_HTTP_ERROR = "OTHER_HTTP_ERROR"
+
+
+@dataclass
+class InteractionResult:
+    """Structured result returned by interaction safety helpers."""
+
+    success: bool
+    reason: InteractionResultReason
+    message: str = ""
+    retry_at: Optional[str] = None
+    response_sent: bool = False
+    message_obj: Any = None
+
+    def __bool__(self) -> bool:
+        """Allow evaluating result directly as boolean for backward compatibility."""
+        return self.success
+
+    @property
+    def is_blocked(self) -> bool:
+        """Return True if failure was due to rate-limiting or Cloudflare block."""
+        return self.reason in (
+            InteractionResultReason.RATE_LIMITED,
+            InteractionResultReason.CLOUDFLARE_BLOCKED,
+        )
 
 
 def is_acknowledged(interaction: discord.Interaction) -> bool:
@@ -29,7 +72,7 @@ def is_acknowledged(interaction: discord.Interaction) -> bool:
 def interaction_alive(interaction: discord.Interaction) -> bool:
     """Check if the interaction is within its valid lifetime (15 minutes)."""
     try:
-        if not interaction.created_at:
+        if not getattr(interaction, "created_at", None):
             return True
         now = datetime.now(timezone.utc)
         elapsed = (now - interaction.created_at).total_seconds()
@@ -43,36 +86,117 @@ async def safe_defer(
     *,
     ephemeral: bool = True,
     thinking: bool = False,
-) -> bool:
+) -> InteractionResult:
     """Immediately acknowledge and defer an interaction if not already acknowledged.
 
-    Returns True if the interaction is acknowledged and usable, False if expired or failed.
+    Coordinated with DiscordAPIGuard. Returns structured InteractionResult.
     """
     if is_acknowledged(interaction):
-        return True
+        return InteractionResult(
+            success=True,
+            reason=InteractionResultReason.ALREADY_RESPONDED,
+            response_sent=True,
+        )
 
     if not interaction_alive(interaction):
-        log.warning("Interaction %s is expired (age > 15m). Cannot defer.", getattr(interaction, "id", "unknown"))
-        return False
+        log.warning(
+            "Interaction %s is expired (age > 15m). Cannot defer.",
+            getattr(interaction, "id", "unknown"),
+        )
+        return InteractionResult(
+            success=False,
+            reason=InteractionResultReason.INTERACTION_EXPIRED,
+            message="Interaction expired (age > 15m).",
+        )
+
+    # Pre-flight check via Global API Guard
+    allowed, api_state, retry_at = api_guard.can_execute()
+    if not allowed:
+        reason = (
+            InteractionResultReason.CLOUDFLARE_BLOCKED
+            if api_state == APIState.CLOUDFLARE_BLOCKED
+            else InteractionResultReason.RATE_LIMITED
+        )
+        log.warning(
+            "[INTERACTION] safe_defer blocked by API guard (state=%s, retry_at=%s)",
+            api_state.value,
+            retry_at,
+        )
+        return InteractionResult(
+            success=False,
+            reason=reason,
+            retry_at=retry_at,
+            message=f"Discord API is currently {api_state.value}.",
+        )
 
     try:
-        await interaction.response.defer(ephemeral=ephemeral, thinking=thinking)
-        return True
-    except discord.NotFound as exc:
-        # Error code 10062: Unknown interaction
-        if getattr(exc, "code", None) == 10062:
-            log.warning("Interaction %s expired before deferral (10062 Unknown interaction).", getattr(interaction, "id", "unknown"))
-        else:
-            log.warning("NotFound during safe_defer: %s", exc)
-        return False
+        # discord.py defer() accepts thinking kwarg in newer versions; pass if needed
+        kwargs = {"ephemeral": ephemeral}
+        if thinking:
+            kwargs["thinking"] = True
+        await interaction.response.defer(**kwargs)
+
+        api_guard.record_success()
+        return InteractionResult(
+            success=True,
+            reason=InteractionResultReason.SUCCESS,
+            response_sent=True,
+        )
     except discord.InteractionResponded:
-        return True
+        return InteractionResult(
+            success=True,
+            reason=InteractionResultReason.ALREADY_RESPONDED,
+            response_sent=True,
+        )
     except discord.HTTPException as exc:
-        log.warning("HTTPException during safe_defer: %s", exc)
-        return False
+        status = getattr(exc, "status", None)
+        body = getattr(exc, "text", "") or str(exc)
+        code = getattr(exc, "code", None)
+
+        if status == 429:
+            api_guard.record_failure(status=429, body=body, error=exc)
+            reason = (
+                InteractionResultReason.CLOUDFLARE_BLOCKED
+                if api_guard.state == APIState.CLOUDFLARE_BLOCKED
+                else InteractionResultReason.RATE_LIMITED
+            )
+            return InteractionResult(
+                success=False,
+                reason=reason,
+                retry_at=api_guard.retry_at,
+                message="Discord API rate limited during defer.",
+            )
+        elif code == 10062:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.INTERACTION_EXPIRED,
+                message="Unknown interaction (10062).",
+            )
+        elif status == 403:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.FORBIDDEN,
+                message="Missing permissions to defer.",
+            )
+        elif status == 404:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.NOT_FOUND,
+                message="Interaction not found.",
+            )
+        else:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.OTHER_HTTP_ERROR,
+                message=str(exc),
+            )
     except Exception as exc:
-        log.error("Unexpected error in safe_defer: %s", exc, exc_info=True)
-        return False
+        log.exception("[INTERACTION] Unexpected error in safe_defer: %s", exc)
+        return InteractionResult(
+            success=False,
+            reason=InteractionResultReason.OTHER_HTTP_ERROR,
+            message=str(exc),
+        )
 
 
 async def safe_send(
@@ -86,63 +210,112 @@ async def safe_send(
     file: discord.File | None = None,
     files: Sequence[discord.File] | None = None,
     delete_after: float | None = None,
-) -> discord.Message | discord.WebhookMessage | None:
+) -> InteractionResult:
     """Safely deliver a message to the user regardless of interaction state.
 
     If not acknowledged: uses interaction.response.send_message.
     If already acknowledged: uses interaction.followup.send.
-    Handles 10062, already-responded, and expired interactions safely.
+    Returns structured InteractionResult.
     """
-    kwargs: dict[str, Any] = {}
+    # Pre-flight check via Global API Guard
+    allowed, api_state, retry_at = api_guard.can_execute()
+    if not allowed:
+        reason = (
+            InteractionResultReason.CLOUDFLARE_BLOCKED
+            if api_state == APIState.CLOUDFLARE_BLOCKED
+            else InteractionResultReason.RATE_LIMITED
+        )
+        log.warning(
+            "[INTERACTION] safe_send blocked by API guard (state=%s, retry_at=%s)",
+            api_state.value,
+            retry_at,
+        )
+        return InteractionResult(
+            success=False,
+            reason=reason,
+            retry_at=retry_at,
+            message=f"Discord API is currently {api_state.value}.",
+        )
+
+    send_kwargs: dict[str, Any] = {"ephemeral": ephemeral}
     if content is not None:
-        kwargs["content"] = content
+        send_kwargs["content"] = content
     if embed is not None:
-        kwargs["embed"] = embed
+        send_kwargs["embed"] = embed
     if embeds is not None:
-        kwargs["embeds"] = embeds
+        send_kwargs["embeds"] = embeds
     if view is not None:
-        kwargs["view"] = view
-    if ephemeral:
-        kwargs["ephemeral"] = ephemeral
+        send_kwargs["view"] = view
     if file is not None:
-        kwargs["file"] = file
+        send_kwargs["file"] = file
     if files is not None:
-        kwargs["files"] = files
+        send_kwargs["files"] = files
     if delete_after is not None:
-        kwargs["delete_after"] = delete_after
+        send_kwargs["delete_after"] = delete_after
 
     try:
-        if is_acknowledged(interaction):
-            return await interaction.followup.send(**kwargs)
+        msg: Any = None
+        if interaction.response.is_done():
+            msg = await interaction.followup.send(**send_kwargs)
         else:
-            await interaction.response.send_message(**kwargs)
-            return None
-    except discord.InteractionResponded:
-        # State changed concurrently, retry via followup
-        try:
-            return await interaction.followup.send(**kwargs)
-        except Exception as exc:
-            log.warning("Failed followup after InteractionResponded: %s", exc)
-            return None
-    except discord.NotFound as exc:
-        if getattr(exc, "code", None) == 10062:
-            log.warning("safe_send failed: 10062 Unknown interaction for %s", getattr(interaction, "id", "unknown"))
-            # Fallback to channel.send if interaction is completely dead and channel is accessible
-            if interaction.channel and hasattr(interaction.channel, "send") and not ephemeral:
-                try:
-                    kwargs.pop("ephemeral", None)
-                    return await interaction.channel.send(**kwargs)
-                except Exception:
-                    pass
-        else:
-            log.warning("NotFound during safe_send: %s", exc)
-        return None
+            await interaction.response.send_message(**send_kwargs)
+
+        api_guard.record_success()
+        return InteractionResult(
+            success=True,
+            reason=InteractionResultReason.SUCCESS,
+            response_sent=True,
+            message_obj=msg,
+        )
     except discord.HTTPException as exc:
-        log.warning("HTTPException in safe_send: %s", exc)
-        return None
+        status = getattr(exc, "status", None)
+        body = getattr(exc, "text", "") or str(exc)
+        code = getattr(exc, "code", None)
+
+        if status == 429:
+            api_guard.record_failure(status=429, body=body, error=exc)
+            reason = (
+                InteractionResultReason.CLOUDFLARE_BLOCKED
+                if api_guard.state == APIState.CLOUDFLARE_BLOCKED
+                else InteractionResultReason.RATE_LIMITED
+            )
+            return InteractionResult(
+                success=False,
+                reason=reason,
+                retry_at=api_guard.retry_at,
+                message="Discord API rate limited during response.",
+            )
+        elif code == 10062:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.INTERACTION_EXPIRED,
+                message="Interaction expired.",
+            )
+        elif status == 403:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.FORBIDDEN,
+                message="Missing permissions.",
+            )
+        elif status == 404:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.NOT_FOUND,
+                message="Not found.",
+            )
+        else:
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.OTHER_HTTP_ERROR,
+                message=str(exc),
+            )
     except Exception as exc:
-        log.error("Unexpected error in safe_send: %s", exc, exc_info=True)
-        return None
+        log.exception("[INTERACTION] Unexpected error in safe_send: %s", exc)
+        return InteractionResult(
+            success=False,
+            reason=InteractionResultReason.OTHER_HTTP_ERROR,
+            message=str(exc),
+        )
 
 
 async def safe_followup(
@@ -155,43 +328,18 @@ async def safe_followup(
     ephemeral: bool = False,
     file: discord.File | None = None,
     files: Sequence[discord.File] | None = None,
-) -> discord.WebhookMessage | None:
-    """Send a followup response, ensuring acknowledgement first if necessary."""
-    kwargs: dict[str, Any] = {}
-    if content is not None:
-        kwargs["content"] = content
-    if embed is not None:
-        kwargs["embed"] = embed
-    if embeds is not None:
-        kwargs["embeds"] = embeds
-    if view is not None:
-        kwargs["view"] = view
-    if ephemeral:
-        kwargs["ephemeral"] = ephemeral
-    if file is not None:
-        kwargs["file"] = file
-    if files is not None:
-        kwargs["files"] = files
-
-    if not is_acknowledged(interaction):
-        deferred = await safe_defer(interaction, ephemeral=ephemeral)
-        if not deferred:
-            # Try direct send
-            await safe_send(interaction, **kwargs)
-            return None
-
-    try:
-        return await interaction.followup.send(**kwargs)
-    except discord.NotFound as exc:
-        if getattr(exc, "code", None) == 10062:
-            log.warning("safe_followup failed: 10062 Unknown interaction")
-        return None
-    except discord.HTTPException as exc:
-        log.warning("HTTPException in safe_followup: %s", exc)
-        return None
-    except Exception as exc:
-        log.error("Unexpected error in safe_followup: %s", exc, exc_info=True)
-        return None
+) -> InteractionResult:
+    """Explicitly send a followup message."""
+    return await safe_send(
+        interaction,
+        content=content,
+        embed=embed,
+        embeds=embeds,
+        view=view,
+        ephemeral=ephemeral,
+        file=file,
+        files=files,
+    )
 
 
 async def safe_edit(
@@ -203,38 +351,67 @@ async def safe_edit(
     view: discord.ui.View | None = None,
     file: discord.File | None = None,
     files: Sequence[discord.File] | None = None,
-) -> None:
+) -> InteractionResult:
     """Safely edit the current message or original response."""
-    kwargs: dict[str, Any] = {}
+    allowed, api_state, retry_at = api_guard.can_execute()
+    if not allowed:
+        reason = (
+            InteractionResultReason.CLOUDFLARE_BLOCKED
+            if api_state == APIState.CLOUDFLARE_BLOCKED
+            else InteractionResultReason.RATE_LIMITED
+        )
+        return InteractionResult(
+            success=False,
+            reason=reason,
+            retry_at=retry_at,
+        )
+
+    edit_kwargs: dict[str, Any] = {}
     if content is not None:
-        kwargs["content"] = content
+        edit_kwargs["content"] = content
     if embed is not None:
-        kwargs["embed"] = embed
+        edit_kwargs["embed"] = embed
     if embeds is not None:
-        kwargs["embeds"] = embeds
+        edit_kwargs["embeds"] = embeds
     if view is not None:
-        kwargs["view"] = view
+        edit_kwargs["view"] = view
     if file is not None:
-        kwargs["file"] = file
+        edit_kwargs["file"] = file
     if files is not None:
-        kwargs["files"] = files
+        edit_kwargs["files"] = files
 
     try:
         if not is_acknowledged(interaction):
-            await interaction.response.edit_message(**kwargs)
+            await interaction.response.edit_message(**edit_kwargs)
         else:
-            await interaction.edit_original_response(**kwargs)
-    except discord.NotFound:
-        log.warning("safe_edit failed: message or interaction not found.")
-    except discord.InteractionResponded:
-        try:
-            await interaction.edit_original_response(**kwargs)
-        except Exception as exc:
-            log.warning("safe_edit edit_original_response failed: %s", exc)
+            await interaction.edit_original_response(**edit_kwargs)
+
+        api_guard.record_success()
+        return InteractionResult(
+            success=True,
+            reason=InteractionResultReason.SUCCESS,
+            response_sent=True,
+        )
     except discord.HTTPException as exc:
-        log.warning("safe_edit HTTPException: %s", exc)
+        if exc.status == 429:
+            api_guard.record_failure(status=429, body=getattr(exc, "text", ""), error=exc)
+            return InteractionResult(
+                success=False,
+                reason=InteractionResultReason.RATE_LIMITED,
+                retry_at=api_guard.retry_at,
+            )
+        return InteractionResult(
+            success=False,
+            reason=InteractionResultReason.OTHER_HTTP_ERROR,
+            message=str(exc),
+        )
     except Exception as exc:
         log.error("Unexpected error in safe_edit: %s", exc, exc_info=True)
+        return InteractionResult(
+            success=False,
+            reason=InteractionResultReason.OTHER_HTTP_ERROR,
+            message=str(exc),
+        )
 
 
 async def safe_modal(

@@ -23,6 +23,10 @@ DEFAULT_JITTER_RATIO: float = 0.25
 DEFAULT_MAX_ATTEMPTS: int = 0  # 0 = unlimited retries for transient failures
 DEFAULT_MAX_RETRY_WINDOW: float = 0.0  # 0 = unlimited window
 
+STARTUP_MAX_BACKOFF: float = DEFAULT_MAX_BACKOFF
+STARTUP_MAX_SERVER_RETRY_AFTER: float = DEFAULT_MAX_SERVER_RETRY_AFTER
+STARTUP_BASE_BACKOFF: float = DEFAULT_BASE_BACKOFF
+
 
 def _get_float_env(var_name: str, default: float, min_val: float, max_val: float) -> float:
     raw = os.getenv(var_name)
@@ -98,6 +102,7 @@ class StartupBackoff:
         Rule 2: Local exponential backoff uses STARTUP_MAX_BACKOFF (default 10m).
         """
         attempt = max(1, attempt)
+        is_zero_retry_after: bool = False
 
         # ── 1. SERVER-PROVIDED RETRY-AFTER ────────────────────────────────────
         if retry_after is not None:
@@ -111,7 +116,14 @@ class StartupBackoff:
                 is_valid = False
 
             if is_valid:
-                if raw_val <= self.max_server_retry_after:
+                if raw_val <= 0:
+                    log.warning(
+                        "[STARTUP] Non-positive Retry-After received (%.2fs). "
+                        "Preventing zero-second retry storm; falling back to exponential backoff with jitter.",
+                        raw_val,
+                    )
+                    is_zero_retry_after = True
+                elif raw_val <= self.max_server_retry_after:
                     bounded = raw_val
                     final_delay = bounded
                     log.info(
@@ -119,6 +131,12 @@ class StartupBackoff:
                         raw_val,
                         bounded,
                         final_delay,
+                    )
+                    return DelayResult(
+                        delay=round(final_delay, 2),
+                        source="server_retry_after",
+                        raw_retry_after=raw_val,
+                        bounded_retry_after=bounded,
                     )
                 else:
                     bounded = self.max_server_retry_after
@@ -129,13 +147,12 @@ class StartupBackoff:
                         bounded,
                         final_delay,
                     )
-
-                return DelayResult(
-                    delay=round(final_delay, 2),
-                    source="server_retry_after",
-                    raw_retry_after=raw_val,
-                    bounded_retry_after=bounded,
-                )
+                    return DelayResult(
+                        delay=round(final_delay, 2),
+                        source="server_retry_after",
+                        raw_retry_after=raw_val,
+                        bounded_retry_after=bounded,
+                    )
             else:
                 log.warning(
                     "[STARTUP] Invalid Retry-After: %s. Falling back to exponential backoff.",
@@ -157,10 +174,11 @@ class StartupBackoff:
 
         return DelayResult(
             delay=round(final_delay, 2),
-            source="exponential_backoff",
-            raw_retry_after=None,
+            source="zero_retry_after_fallback" if is_zero_retry_after else "exponential_backoff",
+            raw_retry_after=raw_val if is_zero_retry_after else None,
             bounded_retry_after=None,
         )
+
 
     def calculate_delay(self, attempt: int, retry_after: float | None = None) -> float:
         """Calculate the next retry sleep duration float."""
@@ -175,3 +193,24 @@ class StartupBackoff:
     def reset(self) -> None:
         """Reset state. Called ONLY after a genuine successful Discord connection."""
         log.debug("[STARTUP] Backoff state reset following successful connection.")
+
+
+def calculate_backoff(
+    attempt: int,
+    retry_after: float | None = None,
+    is_cloudflare_1015: bool = False,
+    max_server_retry_after: float | None = None,
+    max_backoff: float | None = None,
+    base_backoff: float | None = None,
+) -> tuple[float, str]:
+    """Functional helper for retry delay calculation. Returns (delay, source)."""
+    backoff = StartupBackoff(
+        base_delay=base_backoff if base_backoff is not None else DEFAULT_BASE_BACKOFF,
+        max_delay=max_backoff if max_backoff is not None else DEFAULT_MAX_BACKOFF,
+        max_server_retry_after=max_server_retry_after if max_server_retry_after is not None else DEFAULT_MAX_SERVER_RETRY_AFTER,
+    )
+    res = backoff.calculate_delay_details(attempt=attempt, retry_after=retry_after)
+    source = res.source
+    if res.raw_retry_after is not None and res.raw_retry_after > backoff.max_server_retry_after:
+        source = "server_retry_after_capped"
+    return res.delay, source

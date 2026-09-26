@@ -1,5 +1,8 @@
-"""DAMU Core Engine — Central architecture for Discord server management."""
+"""DAMU Core Engine — Central architecture for Discord server management and resilience."""
 
+from core.diagnostics import get_diagnostic_status
+from core.discord_api.guard import DiscordAPIGuard, api_guard
+from core.discord_api.state import APIState
 from core.errors import (
     DamuError,
     ErrorCategory,
@@ -7,6 +10,8 @@ from core.errors import (
     format_user_error,
 )
 from core.interaction import (
+    InteractionResult,
+    InteractionResultReason,
     InteractionSafety,
     interaction_alive,
     is_acknowledged,
@@ -24,6 +29,8 @@ from core.models import (
     EngineResult,
     RiskLevel,
 )
+from core.startup.manager import StartupManager
+from core.startup.state import StartupState
 
 __all__ = [
     "DamuError",
@@ -31,6 +38,8 @@ __all__ = [
     "classify_error",
     "format_user_error",
     "InteractionSafety",
+    "InteractionResult",
+    "InteractionResultReason",
     "interaction_alive",
     "is_acknowledged",
     "safe_defer",
@@ -44,4 +53,10 @@ __all__ = [
     "BuildPlan",
     "EngineResult",
     "RiskLevel",
+    "StartupState",
+    "StartupManager",
+    "APIState",
+    "DiscordAPIGuard",
+    "api_guard",
+    "get_diagnostic_status",
 ]

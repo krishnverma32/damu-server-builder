@@ -23,6 +23,20 @@ class StartupState(str, enum.Enum):
     STOPPING = "STOPPING"
     STOPPED = "STOPPED"
 
+    @property
+    def is_terminal(self) -> bool:
+        """Return True if this is a terminal state that should not be retried."""
+        return self in (
+            StartupState.INVALID_TOKEN,
+            StartupState.FATAL_ERROR,
+            StartupState.STOPPED,
+        )
+
+    @property
+    def is_connected(self) -> bool:
+        """Return True if Discord connection is active."""
+        return self == StartupState.READY
+
 
 @dataclass
 class StartupStatus:

@@ -27,13 +27,26 @@ class StartupManager:
 
     def __init__(
         self,
-        bot: commands.Bot,
+        bot: commands.Bot | None = None,
+        token: str | None = None,
         *,
         backoff: StartupBackoff | None = None,
         config_validator: Callable[[str], None] | None = None,
         keep_alive_on_degraded: bool | None = None,
+        **kwargs: Any,
     ) -> None:
+        if bot is None:
+            try:
+                import main
+                bot = getattr(main, "bot", None)
+            except Exception:
+                bot = None
+        if bot is None:
+            bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
+
         self.bot = bot
+        self._token = token
+        StartupManager._instance = self
         self._backoff = backoff or StartupBackoff.from_env()
         self._config_validator = config_validator or config.validate_discord_token
         
@@ -67,6 +80,10 @@ class StartupManager:
         """Current lifecycle state."""
         return self._state
 
+    def _set_state(self, state: StartupState) -> None:
+        """Set lifecycle state (used for testing and simulation)."""
+        self._state = state
+
     @property
     def is_ready(self) -> bool:
         """True only when the bot has connected and Discord is fully ready."""
@@ -76,6 +93,11 @@ class StartupManager:
     def attempt(self) -> int:
         """Current startup attempt count."""
         return self._attempt
+
+    @property
+    def uptime_seconds(self) -> float:
+        """Seconds elapsed since manager initialization."""
+        return (datetime.now(timezone.utc) - self._start_time).total_seconds()
 
     def get_health_status(self) -> dict[str, Any]:
         """Return safe, structured health and readiness status model."""
@@ -107,6 +129,10 @@ class StartupManager:
         await self._coordinator.execute_shutdown()
         self._state = StartupState.STOPPED
 
+    async def stop(self) -> None:
+        """Perform graceful shutdown (alias for shutdown)."""
+        await self.shutdown()
+
     # ── Connection Lifecycle Loop ─────────────────────────────────────────────
 
     async def run(self, token: str | None = None) -> None:
@@ -123,7 +149,7 @@ class StartupManager:
             self._coordinator.attach_signal_handlers()
 
             # Normalize token
-            target_token = config.normalize_token(token or config.DISCORD_TOKEN)
+            target_token = config.normalize_token(token or self._token or config.DISCORD_TOKEN)
 
             # 2. Validate configuration
             self._state = StartupState.VALIDATING

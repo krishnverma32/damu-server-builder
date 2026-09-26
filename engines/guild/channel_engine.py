@@ -237,3 +237,54 @@ class ChannelEngine:
             "synced_with_category": channel.permissions_synced if hasattr(channel, "permissions_synced") else False,
             "audit_warnings": permission_engine.audit_channel_permissions(channel),
         }
+
+    @staticmethod
+    async def delete_channel_safe(channel: discord.abc.GuildChannel, reason: str = "") -> bool:
+        """Safely delete a channel during transaction rollback or cleanup without throwing unhandled exceptions."""
+        try:
+            await channel.delete(reason=reason)
+            return True
+        except discord.NotFound:
+            return True
+        except Exception as exc:
+            log.warning("[CHANNEL_ENGINE] Failed to safely delete channel %s: %s", getattr(channel, "name", "unknown"), exc)
+            return False
+
+    @staticmethod
+    async def create_text_channel(
+        guild: discord.Guild,
+        name: str,
+        category: Optional[discord.CategoryChannel] = None,
+        overwrites: Optional[dict] = None,
+        topic: Optional[str] = None,
+        reason: str = "",
+    ) -> Optional[discord.TextChannel]:
+        """Create a text channel coordinated with API guard."""
+        from core.discord_api.guard import api_guard
+        allowed, api_state, retry_at = api_guard.can_execute()
+        if not allowed:
+            log.warning("[CHANNEL_ENGINE] create_text_channel blocked by API guard (state=%s)", api_state.value)
+            return None
+
+        kwargs: dict[str, Any] = {
+            "name": name,
+            "category": category,
+            "reason": reason,
+        }
+        if overwrites:
+            kwargs["overwrites"] = overwrites
+        if topic:
+            kwargs["topic"] = topic
+
+        try:
+            ch = await guild.create_text_channel(**kwargs)
+            api_guard.record_success()
+            return ch
+        except discord.HTTPException as exc:
+            if getattr(exc, "status", None) == 429:
+                api_guard.record_failure(status=429, body=getattr(exc, "text", ""), error=exc)
+            log.error("[CHANNEL_ENGINE] Failed to create channel: %s", exc)
+            return None
+        except Exception as exc:
+            log.exception("[CHANNEL_ENGINE] Error creating channel: %s", exc)
+            return None
