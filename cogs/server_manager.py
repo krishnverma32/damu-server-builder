@@ -197,6 +197,9 @@ class CreateChannelModal(discord.ui.Modal, title="Create New Channel"):
         self.user_id = user_id
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id or not interaction.user.guild_permissions.administrator:
+            await safe_send(interaction, "The requesting administrator must submit this form.", ephemeral=True)
+            return
         await safe_defer(interaction, ephemeral=True)
         ch_type = self.channel_type.value.strip().lower()
         if ch_type not in ("text", "voice", "forum", "stage"):
@@ -487,6 +490,7 @@ class ChangePreviewView(discord.ui.View):
         self.guild = guild
         self.user_id = user_id
         self.plan = plan
+        self.busy = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -497,11 +501,20 @@ class ChangePreviewView(discord.ui.View):
     @discord.ui.button(label="Apply Changes", style=discord.ButtonStyle.success, emoji="✅", row=0)
     async def apply(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         await safe_defer(interaction, ephemeral=True)
-        ctx = await engine.create_context(self.guild, interaction.user, interaction)
-        result = await engine.execute(self.plan, ctx)
-        embed = format_result_embed(result)
-        view = BackToMainView(self.guild, self.user_id)
-        await safe_edit(interaction, embed=embed, view=view)
+        if interaction.user.id != self.user_id or not interaction.user.guild_permissions.administrator:
+            return await safe_send(interaction, "The requesting administrator must still have Administrator permission.", ephemeral=True)
+        if self.busy or self.is_finished():
+            return await safe_send(interaction, "This change is already being applied or has finished.", ephemeral=True)
+        self.busy = True
+        try:
+            ctx = await engine.create_context(self.guild, interaction.user, interaction)
+            result = await engine.execute(self.plan, ctx)
+            embed = format_result_embed(result)
+            view = BackToMainView(self.guild, self.user_id)
+            await safe_edit(interaction, embed=embed, view=view)
+            self.stop()
+        finally:
+            self.busy = False
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="❌", row=0)
     async def cancel(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
