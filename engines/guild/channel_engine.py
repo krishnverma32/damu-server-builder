@@ -32,7 +32,7 @@ class ChannelEngine:
 
         # Resolve category if specified
         category: discord.CategoryChannel | None = None
-        category_param = params.get("category")
+        category_param = params.get("category") or params.get("category_id")
         if category_param:
             if isinstance(category_param, discord.CategoryChannel):
                 category = category_param
@@ -41,6 +41,9 @@ class ChannelEngine:
             else:
                 cat_name = str(category_param).lower()
                 category = discord.utils.find(lambda c: c.name.lower() == cat_name, guild.categories)
+
+        if category_param and not isinstance(category, discord.CategoryChannel):
+            raise ValidationError("Select an existing category in this server.", field="category")
 
         # Build overwrites: either from preset or direct list
         overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite] = {}

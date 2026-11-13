@@ -141,5 +141,8 @@ AUTOMOD_FILE: str = f"{DATA_DIR}/automod/offenses.json"
 
 # ── Bot Meta ──────────────────────────────────────────────────────────────────
 BOT_NAME: str = "DAMU Server Builder"
-BOT_VERSION: str = "2.0.0"
+BOT_VERSION: str = "2.3.0"
 BOT_COLOR: int = 0x5865F2       # blurple
+
+# Creator credit for the dynamic application description and Discord presence.
+BOT_CREATOR_NAME: str = os.getenv("BOT_CREATOR_NAME", "luffyanna").strip()[:80] or "luffyanna"

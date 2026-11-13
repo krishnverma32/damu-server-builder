@@ -9,10 +9,10 @@ import discord
 import config
 
 # ── Colour palette ────────────────────────────────────────────────────────────────
-_GREEN = 0x2ECC71
-_RED = 0xE74C3C
-_BLUE = 0x3498DB
-_ORANGE = 0xE67E22
+_GREEN = 0x57F287
+_RED = 0xED4245
+_BLUE = 0x5865F2
+_ORANGE = 0xFEE75C
 
 
 def _base(title: str, description: str, colour: int) -> discord.Embed:
@@ -22,7 +22,7 @@ def _base(title: str, description: str, colour: int) -> discord.Embed:
         colour=colour,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    em.set_footer(text=f"{config.BOT_NAME} v{config.BOT_VERSION}")
+    em.set_footer(text=f"{config.BOT_NAME} v{config.BOT_VERSION} • Created by {config.BOT_CREATOR_NAME}")
     return em
 
 

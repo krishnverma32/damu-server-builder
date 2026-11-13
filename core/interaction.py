@@ -166,6 +166,8 @@ async def safe_defer(
                 retry_at=api_guard.retry_at,
                 message="Discord API rate limited during defer.",
             )
+        elif code == 40060:
+            return InteractionResult(success=True, reason=InteractionResultReason.ALREADY_RESPONDED, response_sent=True)
         elif code == 10062:
             return InteractionResult(
                 success=False,

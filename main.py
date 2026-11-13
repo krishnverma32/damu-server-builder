@@ -55,6 +55,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.presences = False
+intents.voice_states = True
+intents.moderation = True
 
 
 class ServerBot(commands.Bot):
@@ -69,10 +71,13 @@ class ServerBot(commands.Bot):
                 type=discord.ActivityType.watching, name="/help | v" + config.BOT_VERSION
             ),
         )
+        self.extension_errors = {}
+        self.command_sync_error = None
         self.start_time: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
 
     async def setup_hook(self) -> None:
         """Load all cogs dynamically from the cogs/ directory."""
+        log.info("Release: DAMU v%s | source=krishnverma32/damu-server-builder", config.BOT_VERSION)
         cog_dir = pathlib.Path("cogs")
         for cog_file in cog_dir.glob("*.py"):
             if cog_file.name.startswith("_"):
@@ -82,6 +87,7 @@ class ServerBot(commands.Bot):
                 await self.load_extension(ext)
                 log.info("Loaded cog: %s", ext)
             except Exception as exc:
+                self.extension_errors[ext] = type(exc).__name__
                 log.error("Failed to load cog %s: %s", ext, exc)
 
         # Sync application commands globally
@@ -89,6 +95,7 @@ class ServerBot(commands.Bot):
             synced = await self.tree.sync()
             log.info("Synced %d slash commands globally.", len(synced))
         except Exception as exc:
+            self.command_sync_error = type(exc).__name__
             log.error("Failed to sync application commands: %s", exc)
 
     async def on_ready(self) -> None:
