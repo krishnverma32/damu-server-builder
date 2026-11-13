@@ -25,3 +25,8 @@ ticket_config.json
 
 # Runtime data files (ephemeral on Render)
 data/
+
+# Development virtual environment and SQLite sidecars
+.venv/
+*.sqlite3-wal
+*.sqlite3-shm
